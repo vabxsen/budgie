@@ -1,0 +1,583 @@
+@media (min-width: 721px) and (max-width: 1200px) {
+  .sidebar {
+    width: 185px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .workspace {
+    margin-left: 185px;
+  }
+  .topbar {
+    padding: 0 26px;
+  }
+  main {
+    padding: 30px 26px;
+  }
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr) 255px;
+    gap: 20px;
+  }
+  .service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .library-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .today-label {
+    display: none;
+  }
+  .hero-amount {
+    font-size: 50px;
+  }
+  .spending-seal {
+    width: 77px;
+    height: 77px;
+  }
+  .calendar-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr) 240px;
+  }
+  .sidebar-caption {
+    font-size: 7px;
+    letter-spacing: 0.6px;
+  }
+  .wordmark {
+    font-size: 31px;
+  }
+}
+@media (min-width: 721px) and (max-width: 950px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .overview-aside {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .budget-card {
+    margin-top: 0;
+  }
+  .local-note {
+    grid-column: 1/-1;
+  }
+  .insights-grid,
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .demo-label {
+    display: none;
+  }
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .profile small {
+    font-size: 8px;
+  }
+}
+@media (max-width: 720px) {
+  .app-shell .sidebar {
+    display: none;
+  }
+  .app-shell .workspace {
+    margin-left: 0;
+  }
+  .app-shell .topbar {
+    padding: 0 18px;
+    height: 65px;
+    gap: 7px;
+  }
+  .app-shell .topbar-actions {
+    gap: 8px;
+  }
+  .app-shell .today-label,
+  .app-shell .demo-label {
+    display: none;
+  }
+  .app-shell main {
+    padding: 27px 19px;
+  }
+  .app-shell .breadcrumb {
+    font-size: 10px;
+    gap: 8px;
+  }
+  .app-shell .preview-toggle {
+    padding-left: 8px;
+  }
+  .app-shell .page-heading {
+    align-items: flex-start;
+    gap: 18px;
+    flex-direction: column;
+  }
+  .app-shell .page-heading h1 {
+    font-size: 35px;
+  }
+  .app-shell .page-heading > .button {
+    min-height: 44px;
+  }
+  .app-shell .overview-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .app-shell .overview-main,
+  .app-shell .overview-aside {
+    width: 100%;
+  }
+  .app-shell .spending-card {
+    padding: 18px 18px 0;
+  }
+  .app-shell .spending-top > span {
+    font-size: 7px;
+    letter-spacing: 0.5px;
+    gap: 5px;
+  }
+  .app-shell .spending-top > span svg {
+    width: 16px;
+  }
+  .app-shell .segmented button {
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+  .app-shell .hero-amount {
+    font-size: 51px;
+  }
+  .app-shell .spending-seal {
+    width: 75px;
+    height: 75px;
+    margin-right: 0;
+  }
+  .app-shell .spending-seal svg {
+    width: 24px;
+    height: 24px;
+  }
+  .app-shell .spending-seal span {
+    font-size: 6px;
+  }
+  .app-shell .quick-stats > div,
+  .app-shell .quick-stats > button {
+    padding: 0 11px;
+  }
+  .app-shell .quick-stats > :first-child {
+    padding-left: 0;
+  }
+  .app-shell .quick-stats > :last-child {
+    padding-right: 0;
+  }
+  .app-shell .quick-stats strong {
+    font-size: 22px;
+  }
+  .app-shell .quick-stats > * > span {
+    font-size: 9px;
+    gap: 4px;
+  }
+  .app-shell .quick-stats > * > span svg {
+    display: none;
+  }
+  .app-shell .quick-stats small {
+    font-size: 8px;
+  }
+  .app-shell .stat-sticker {
+    display: none;
+  }
+  .app-shell .service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .app-shell .service-card {
+    padding: 14px 13px 0;
+  }
+  .app-shell .service-bottom {
+    margin: 0 -13px;
+    padding: 10px;
+    font-size: 8px;
+  }
+  .app-shell .service-cycle {
+    display: none;
+  }
+  .app-shell .card-category {
+    font-size: 7px;
+    max-width: 75px;
+    padding: 3px;
+  }
+  .app-shell .service-card .brand-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .app-shell .section-heading h2 {
+    font-size: 24px;
+  }
+  .app-shell .section-heading p {
+    font-size: 10px;
+    max-width: 240px;
+  }
+  .app-shell .overview-aside {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .app-shell .next-card,
+  .app-shell .budget-card {
+    padding: 24px;
+  }
+  .app-shell .timeline strong {
+    font-size: 12px;
+  }
+  .app-shell .timeline small {
+    font-size: 10px !important;
+  }
+  .app-shell .timeline b {
+    font-size: 13px;
+  }
+  .app-shell .budget-card h2 {
+    max-width: none;
+  }
+  .app-shell .local-note {
+    justify-content: center;
+  }
+  .app-shell .page-footer {
+    padding: 20px 19px 95px;
+  }
+  .app-shell .page-footer > span:last-child {
+    display: none;
+  }
+  .app-shell .mobile-nav {
+    display: flex;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    height: 70px;
+    align-items: center;
+    justify-content: space-around;
+    z-index: 30;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    gap: 6px;
+    color: var(--muted);
+    min-width: 52px;
+    min-height: 48px;
+  }
+  .mobile-nav button.active {
+    color: var(--ink);
+  }
+  .mobile-nav button.active > svg {
+    color: #899956;
+  }
+  .app-shell .collection-summary {
+    padding: 20px;
+    gap: 24px;
+  }
+  .app-shell .collection-summary strong {
+    font-size: 25px;
+  }
+  .app-shell .collection-summary > div > span {
+    font-size: 9px;
+  }
+  .app-shell .filter-tabs {
+    gap: 18px;
+  }
+  .app-shell .filter-tabs > button {
+    font-size: 10px;
+  }
+  .app-shell .filter-tabs span {
+    font-size: 8px;
+    padding: 2px 4px;
+    margin-left: 4px;
+  }
+  .app-shell .view-switch {
+    display: none;
+  }
+  .app-shell .search-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .app-shell .select-field {
+    width: max-content;
+  }
+  .app-shell .library-grid .service-card h3 {
+    font-size: 19px;
+  }
+  .app-shell .calendar-layout {
+    grid-template-columns: 1fr;
+  }
+  .app-shell .calendar-panel {
+    padding: 17px;
+  }
+  .app-shell .calendar-toolbar h2 {
+    font-size: 20px;
+  }
+  .app-shell .calendar-toolbar > div {
+    gap: 0;
+  }
+  .app-shell .calendar-toolbar .icon-button {
+    width: 30px;
+  }
+  .app-shell .calendar-grid {
+    gap: 3px;
+  }
+  .app-shell .day {
+    height: 74px;
+    padding: 8px 2px;
+  }
+  .app-shell .weekday {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+  .app-shell .day .brand-icon {
+    width: 21px;
+    height: 21px;
+  }
+  .app-shell .day .brand-icon svg {
+    width: 13px;
+    height: 13px;
+  }
+  .app-shell .day small {
+    font-size: 7px;
+  }
+  .app-shell .calendar-legend p {
+    display: none;
+  }
+  .app-shell .insights-grid {
+    grid-template-columns: 1fr;
+  }
+  .app-shell .chart-panel {
+    padding: 23px 17px;
+  }
+  .app-shell .bar-chart {
+    gap: 9px;
+  }
+  .app-shell .chart-panel .soft-tag {
+    display: none;
+  }
+  .app-shell .bar-column > span {
+    font-size: 9px;
+  }
+  .app-shell .insight-total h2 {
+    font-size: 43px;
+  }
+  .app-shell .insight-total > span {
+    font-size: 11px;
+  }
+  .app-shell .insight-total p {
+    font-size: 9px;
+  }
+  .app-shell .ranking {
+    padding: 0 15px;
+  }
+  .app-shell .ranking button {
+    gap: 10px;
+  }
+  .app-shell .ranking strong {
+    width: auto;
+    flex: 1;
+  }
+  .app-shell .ranking-track {
+    display: none;
+  }
+  .app-shell .ranking b {
+    min-width: 65px;
+  }
+  .app-shell .ranking .rank-number {
+    width: 13px;
+    font-size: 9px;
+  }
+  .app-shell .reminder-banner {
+    padding: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .app-shell .banner-bell {
+    width: 38px;
+    height: 38px;
+  }
+  .app-shell .reminder-banner > div {
+    flex: 1;
+  }
+  .app-shell .reminder-banner h2 {
+    font-size: 22px;
+  }
+  .app-shell .reminder-banner p {
+    font-size: 10px;
+  }
+  .app-shell .reminder-banner .toggle {
+    margin-top: 10px;
+  }
+  .app-shell .reminder-list > button {
+    gap: 12px;
+    padding: 16px 14px;
+  }
+  .app-shell .reminder-list .brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .app-shell .reminder-list .brand-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+  .app-shell .reminder-info h3 {
+    font-size: 17px;
+  }
+  .app-shell .reminder-info .soft-tag {
+    display: none;
+  }
+  .app-shell .reminder-info p {
+    font-size: 9px;
+  }
+  .app-shell .reminder-info > small {
+    font-size: 8px;
+  }
+  .app-shell .reminder-day {
+    width: 28px;
+    padding-right: 10px;
+  }
+  .app-shell .reminder-list > button > strong {
+    font-size: 21px;
+  }
+  .app-shell .reminder-list > button > svg {
+    display: none;
+  }
+  .app-shell .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .app-shell .setting-row {
+    gap: 10px;
+  }
+  .app-shell .setting-row p {
+    font-size: 9px;
+    max-width: 170px;
+  }
+  .app-shell .setting-row select {
+    max-width: 117px;
+    font-size: 10px;
+  }
+  .app-shell .setting-value {
+    font-size: 11px;
+  }
+  .app-shell .settings-section > h2 {
+    font-size: 24px;
+  }
+  .app-shell .settings-section h3 {
+    font-size: 12px;
+  }
+  .app-shell .toast {
+    left: 50%;
+  }
+  .app-shell .row-date {
+    display: none;
+  }
+  .app-shell .service-list {
+    padding: 0 12px;
+  }
+  .app-shell .row-name strong {
+    font-size: 12px;
+  }
+  .app-shell .row-name small {
+    font-size: 9px;
+  }
+  .app-shell .row-amount {
+    min-width: 58px;
+    font-size: 14px;
+  }
+
+  .app-shell .mobile-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+  .app-shell .topbar .breadcrumb {
+    font-size: 11px;
+  }
+  .app-shell .topbar .breadcrumb > strong {
+    display: none;
+  }
+  .app-shell .topbar .breadcrumb > svg {
+    display: none;
+  }
+  .app-shell .topbar .breadcrumb {
+    font-size: 0;
+  }
+  .app-shell .topbar .breadcrumb::before {
+    content: "budgie";
+    font-family: "Bricolage Grotesque Variable", sans-serif;
+    font-size: 25px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: var(--ink);
+  }
+  .app-shell .preview-toggle {
+    display: none;
+  }
+  .app-shell .topbar .today-label {
+    display: block;
+    font-size: 10px;
+  }
+  .app-shell .toast {
+    bottom: 82px;
+  }
+  .app-shell.mobile-preview {
+    margin: 0;
+    box-shadow: none;
+    max-width: none;
+  }
+  .app-shell .modal {
+    padding: 20px;
+    max-height: 92dvh;
+  }
+  .app-shell .modal h2 {
+    font-size: 27px;
+  }
+  .app-shell .detail-actions {
+    flex-direction: column;
+  }
+  .app-shell .detail-price {
+    font-size: 49px;
+  }
+  .app-shell .modal-actions {
+    flex-wrap: wrap;
+  }
+  .app-shell .service-card-top .card-category {
+    font-size: 7px;
+  }
+  .app-shell .spending-footer > button {
+    font-size: 9px;
+  }
+  .app-shell .page-heading .eyebrow {
+    font-size: 8px;
+  }
+  .app-shell .service-bottom {
+    font-size: 8px;
+  }
+  .app-shell .page-heading {
+    margin-bottom: 23px;
+  }
+}
+@media (max-width: 360px) {
+  .app-shell .spending-seal {
+    display: none;
+  }
+  .app-shell .card-category {
+    display: none;
+  }
+  .app-shell .collection-summary {
+    gap: 18px;
+  }
+  .app-shell .collection-summary strong {
+    font-size: 22px;
+  }
+  .app-shell .reminder-info h3 {
+    font-size: 15px;
+  }
+}

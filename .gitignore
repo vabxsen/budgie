@@ -1,0 +1,31 @@
+# Generated output and dependencies
+builds/
+**/build/
+**/dist/
+**/node_modules/
+**/.gradle/
+**/.kotlin/
+**/.idea/
+*.apk
+*.aab
+*.apks
+*.hprof
+*.log
+
+# Machine configuration, credentials, and signing material
+local.properties
+.env
+.env.*
+*.jks
+*.keystore
+keystore.properties
+key.properties
+*.p12
+*.pfx
+*.pem
+*.key
+credentials.json
+service-account*.json
+google-services.json
+.DS_Store
+Thumbs.db
