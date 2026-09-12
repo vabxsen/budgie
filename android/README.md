@@ -31,7 +31,7 @@ Keep `GRADLE_USER_HOME` outside OneDrive, for example `%USERPROFILE%\.gradle`. T
 Device tests require an unlocked Android emulator or test phone. They replace Budgie data on that test device and can post a test notification, so do not run them against a personal collection.
 
 - Package: `com.vabxsen.budgie`
-- Version: `0.1.0` / code `1`
+- Version: `1.0.0` / code `1`
 - Minimum Android: 8.0 / API 26
 - Compile and target SDK: 36
 - Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
