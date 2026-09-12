@@ -62,12 +62,7 @@ class SubscriptionTest {
             0,
             listOf(monthly, yearly, weekly).monthlyTotal().compareTo(BigDecimal("25200")),
         )
-        assertEquals(
-            0,
-            ServiceCatalog.samples(LocalDate.of(2026, 9, 12))
-                .monthlyTotal()
-                .compareTo(BigDecimal("297000")),
-        )
+
     }
 
     @Test

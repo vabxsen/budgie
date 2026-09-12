@@ -277,7 +277,8 @@ fun SubscriptionRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "${date.format(ShortDate)} · ${sub.cycle.label}",
+                if (sub.status == SubscriptionStatus.ARCHIVED) "Archived · ${sub.cycle.label}"
+                else "${date.format(ShortDate)} · ${sub.cycle.label}",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.muted,
             )

@@ -42,10 +42,9 @@ class BudgieViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun onboard(samples: Boolean) =
+    fun onboard() =
         change("") {
             it.copy(
-                subscriptions = if (samples) ServiceCatalog.samples() else it.subscriptions,
                 preferences = it.preferences.copy(onboarded = true),
             )
         }

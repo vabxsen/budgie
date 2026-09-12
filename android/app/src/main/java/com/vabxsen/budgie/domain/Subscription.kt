@@ -103,7 +103,7 @@ data class Subscription(
 }
 
 data class Preferences(
-    val budgetMinor: Long = 400_000,
+    val budgetMinor: Long = 0,
     val reminderDays: Int = 3,
     val notifications: Boolean = false,
     val appearance: Appearance = Appearance.SYSTEM,
@@ -167,30 +167,4 @@ object ServiceCatalog {
             Service("iCloud+", "icloud", Category.STORAGE),
         )
 
-    fun samples(today: LocalDate = LocalDate.now()): List<Subscription> {
-        val prices = listOf(64900L, 11900L, 14900L, 80000L, 74900L, 13000L, 29900L, 7500L)
-        val plans =
-            listOf(
-                "Standard",
-                "Premium Individual",
-                "Premium",
-                "Plus",
-                "Professional",
-                "100 GB",
-                "Monthly",
-                "50 GB",
-            )
-        val days = listOf(3L, 6L, 8L, 10L, 12L, 13L, 16L, 17L)
-        return services.mapIndexed { index, s ->
-            Subscription(
-                name = s.name,
-                brand = s.brand,
-                category = s.category,
-                priceMinor = prices[index],
-                plan = plans[index],
-                anchorDate = today.plusDays(days[index]),
-                createdDate = today,
-            )
-        }
-    }
 }

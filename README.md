@@ -8,12 +8,12 @@ Budgie brings recurring payments, renewal dates, and spending into one place. Th
 
 | Project | Stack | Status |
 | --- | --- | --- |
-| [Android](android/) | Kotlin, Jetpack Compose, WorkManager | Usable offline first version, 0.1.0 |
+| [Android](android/) | Kotlin, Jetpack Compose, WorkManager | Offline collection with optional Google sign-in |
 | [Website preview](web-preview/) | React, Vite | Interactive responsive prototype |
 
 ### Android
 
-The native app includes subscription creation and editing, weekly/monthly/yearly billing, a renewal calendar, category insights, budgets, free trials, archiving, search, light/dark themes, renewal notifications, and CSV/JSON export and restore. It starts with an empty collection; fictional sample subscriptions are optional.
+The native app includes subscription creation and editing, weekly/monthly/yearly billing, a renewal calendar, category insights, budgets, free trials, archiving, search, light/dark themes, renewal notifications, and CSV/JSON export and restore. It starts with an empty collection and no preset budget. Spending is calculated from subscriptions entered by the user.
 
 Open `android/` in Android Studio with JDK 17 or 21 and Android SDK 36. Android 8.0 or newer is supported.
 

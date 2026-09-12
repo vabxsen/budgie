@@ -163,7 +163,7 @@ fun HomeScreen(
                     "Next 7 days",
                     money(
                         upcoming
-                            .filter { ChronoUnit.DAYS.between(today, it.nextRenewal(today)) <= 7 }
+                            .filter { ChronoUnit.DAYS.between(today, it.nextRenewal(today)) < 7 }
                             .sumOf { it.priceMinor }
                     ),
                     "Upcoming payments",
@@ -178,7 +178,7 @@ fun HomeScreen(
             }
         }
         item { SectionHeading("Your little collection", "View all", onLibrary) }
-        if (active.isEmpty())
+        if (upcoming.isEmpty())
             item {
                 EmptyState(
                     "Start your collection.",
@@ -187,7 +187,7 @@ fun HomeScreen(
                     onAdd,
                 )
             }
-        items(active.take(6).chunked(2), key = { it.first().id }) { row ->
+        items(upcoming.take(6).chunked(2), key = { it.first().id }) { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { sub ->
                     SubscriptionCard(sub, today, { onOpen(sub) }, Modifier.weight(1f))
@@ -249,6 +249,20 @@ private fun MiniStat(label: String, value: String, caption: String, modifier: Mo
 
 @Composable
 fun BudgetCard(total: BigDecimal, budget: Long, onEdit: () -> Unit) {
+    if (budget == 0L) {
+        Surface(color = Pine, shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                Text("Your budget, your choice.", color = Color.White,
+                    style = MaterialTheme.typography.headlineMedium)
+                Text("Set a monthly limit when you’re ready. Budgie will compare it with your subscriptions.",
+                    color = Color(0xFFBFC8B4), fontSize = 12.sp)
+                TextButton(onClick = onEdit, colors = ButtonDefaults.textButtonColors(contentColor = Butter)) {
+                    Text("Set monthly budget")
+                }
+            }
+        }
+        return
+    }
     val remainder = budget.toBigDecimal() - total
     Surface(color = Pine, shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -438,7 +452,7 @@ fun CollectionScreen(
 }
 
 @Composable
-fun WelcomeScreen(onStart: () -> Unit, onSamples: () -> Unit) {
+fun WelcomeScreen(onStart: () -> Unit) {
     Column(
         Modifier.fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -501,9 +515,6 @@ fun WelcomeScreen(onStart: () -> Unit, onSamples: () -> Unit) {
             Modifier.fillMaxWidth(),
             Icons.AutoMirrored.Rounded.ArrowForward,
         )
-        TextButton(onClick = onSamples, modifier = Modifier.fillMaxWidth()) {
-            Text("Explore with sample data", color = colors.muted)
-        }
         Text(
             "Amounts are tracked in Indian rupees (₹).",
             fontSize = 11.sp,

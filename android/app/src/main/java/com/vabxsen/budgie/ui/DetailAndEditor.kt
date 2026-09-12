@@ -68,7 +68,10 @@ fun DetailScreen(sub: Subscription, today: LocalDate, onEdit: () -> Unit, onArch
             }
         }
         item {
-            Surface(color = Butter, shape = RoundedCornerShape(14.dp)) {
+            if (sub.status == SubscriptionStatus.ARCHIVED) {
+                Text("Archived in Budgie. Excluded from spending totals and reminders.",
+                    color = colors.muted, style = MaterialTheme.typography.bodyMedium)
+            } else Surface(color = Butter, shape = RoundedCornerShape(14.dp)) {
                 Row(
                     Modifier.fillMaxWidth().padding(20.dp),
                     verticalAlignment = Alignment.CenterVertically,

@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -74,7 +75,11 @@ class ReminderWorker(context: Context, params: WorkerParameters) :
                 .first()
                 .getOrNull()
                 ?.onDate(LocalDate.now()) ?: return Result.retry()
-        if (!collection.preferences.notifications) return Result.success()
+        val notifications = NotificationManagerCompat.from(applicationContext)
+        if (!collection.preferences.notifications) {
+            notifications.cancelAll()
+            return Result.success()
+        }
         if (
             Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(
@@ -83,18 +88,27 @@ class ReminderWorker(context: Context, params: WorkerParameters) :
                 ) != PackageManager.PERMISSION_GRANTED
         )
             return Result.success()
-        val notifications = NotificationManagerCompat.from(applicationContext)
         if (!notifications.areNotificationsEnabled()) return Result.success()
         val ledger =
             applicationContext.getSharedPreferences("reminder-delivery", Context.MODE_PRIVATE)
         val today = LocalDate.now()
-        for (sub in collection.subscriptions.filter { it.status != SubscriptionStatus.ARCHIVED }) {
+        val eligible = collection.subscriptions.filter {
+            it.status != SubscriptionStatus.ARCHIVED &&
+                ChronoUnit.DAYS.between(today, it.nextRenewal(today)) <= it.reminderDays
+        }
+        val eligibleTags = eligible.map { "budgie:${it.id}" }.toSet()
+        val posted = applicationContext.getSystemService(NotificationManager::class.java).activeNotifications
+        posted.filter { it.tag !in eligibleTags }.forEach { notifications.cancel(it.tag, it.id) }
+        for (sub in eligible) {
             val renewal = sub.nextRenewal(today)
             val days = ChronoUnit.DAYS.between(today, renewal)
             val token = "${renewal}|${sub.reminderDays}"
-            if (days > sub.reminderDays || ledger.getString(sub.id, null) == token) continue
+            val tag = "budgie:${sub.id}"
+            // Refresh visible reminders after edits without re-alerting or re-posting dismissed ones.
+            if (ledger.getString(sub.id, null) == token && posted.none { it.tag == tag }) continue
             val intent =
                 Intent(applicationContext, MainActivity::class.java)
+                    .setData(Uri.Builder().scheme("budgie").authority("subscription").appendPath(sub.id).build())
                     .putExtra("subscription_id", sub.id)
                     .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             val pending =
@@ -117,13 +131,15 @@ class ReminderWorker(context: Context, params: WorkerParameters) :
                 "${money(sub.priceMinor)} · ${sub.cycle.label}. A little heads-up from Budgie."
             try {
                 notifications.notify(
-                    sub.id.hashCode(),
+                    tag,
+                    0,
                     NotificationCompat.Builder(applicationContext, ReminderScheduler.CHANNEL)
                         .setSmallIcon(R.drawable.ic_bird)
                         .setContentTitle(title)
                         .setContentText(text)
                         .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                         .setContentIntent(pending)
+                        .setOnlyAlertOnce(true)
                         .setAutoCancel(true)
                         .setCategory(NotificationCompat.CATEGORY_REMINDER)
                         .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)

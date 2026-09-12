@@ -44,13 +44,17 @@ class BudgieFlowTest {
         ui.onAllNodesWithText("Add subscription")[0].performClick()
         ui.onNodeWithTag("subscription-editor").performScrollToNode(hasText("Service name"))
         ui.onNodeWithText("Service name").performTextInput("Test service")
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
         ui.onNodeWithTag("subscription-editor").performScrollToNode(hasText("Amount (₹)"))
-        ui.onNodeWithText("Amount (₹)").performTextInput("123.45")
+        ui.onNodeWithText("Amount (₹)").performClick()
+        ui.waitForIdle()
+        ui.onNodeWithText("Amount (₹)").performTextReplacement("123.45")
         ui.onNodeWithTag("subscription-editor").performScrollToNode(hasText("Save subscription"))
         ui.onNodeWithText("Save subscription").performClick()
         ui.waitUntil(5_000) { app.repository.state.value?.getOrNull()?.subscriptions?.size == 1 }
         ui.onNodeWithText("Test service").assertIsDisplayed()
         waitForSaveMessage()
+        ui.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Edit subscription"))
         ui.onNodeWithText("Edit subscription").performScrollTo().performClick()
         ui.onNodeWithTag("subscription-editor").performScrollToNode(hasText("Amount (₹)"))
         ui.onNodeWithText("Amount (₹)").performTextReplacement("199.99")
@@ -61,6 +65,7 @@ class BudgieFlowTest {
                 19999L
         }
         waitForSaveMessage()
+        ui.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Archive subscription"))
         ui.onNodeWithText("Archive subscription").performScrollTo().performClick()
         ui.onNodeWithText("Archive", useUnmergedTree = true).performClick()
         ui.waitUntil(5_000) {
@@ -72,6 +77,7 @@ class BudgieFlowTest {
                 .fetchSemanticsNodes()
                 .isEmpty()
         }
+        ui.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Restore subscription"))
         ui.onNodeWithText("Restore subscription").performScrollTo().performClick()
         ui.waitUntil(5_000) {
             app.repository.state.value?.getOrNull()?.subscriptions?.singleOrNull()?.status ==
@@ -89,7 +95,7 @@ class BudgieFlowTest {
 
     @Test
     fun navigationSearchAndAppearancePersist() {
-        seed(BudgieCollection(ServiceCatalog.samples(), Preferences(onboarded = true)))
+        seed(BudgieCollection(listOf(Subscription(name = "Netflix", priceMinor = 10000, anchorDate = LocalDate.now()), Subscription(name = "Spotify", priceMinor = 20000, anchorDate = LocalDate.now().plusDays(2))), Preferences(onboarded = true)))
         ui.onNodeWithText("Subscriptions", useUnmergedTree = true).performClick()
         ui.onNodeWithText("Search subscriptions").performScrollTo().performTextInput("Spotify")
         ui.onNode(hasText("Spotify") and !hasSetTextAction()).performScrollTo().assertIsDisplayed()
@@ -97,6 +103,7 @@ class BudgieFlowTest {
         ui.onNodeWithText("A date with your dues.").assertIsDisplayed()
         ui.onNodeWithText("Insights", useUnmergedTree = true).performClick()
         ui.onNodeWithText("Settings", useUnmergedTree = true).performClick()
+        ui.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Appearance"))
         ui.onNodeWithText("Appearance").performScrollTo().performClick()
         ui.onNodeWithText("After hours").performClick()
         ui.waitUntil(5_000) {
@@ -132,9 +139,9 @@ class BudgieFlowTest {
         val manager = app.getSystemService(NotificationManager::class.java)
         manager.cancelAll()
         ReminderScheduler.checkNow(app)
-        ui.waitUntil(20_000) { manager.activeNotifications.any { it.id == sub.id.hashCode() } }
+        ui.waitUntil(20_000) { manager.activeNotifications.any { it.tag == "budgie:${sub.id}" } }
         val notification =
-            manager.activeNotifications.first { it.id == sub.id.hashCode() }.notification
+            manager.activeNotifications.first { it.tag == "budgie:${sub.id}" }.notification
         assertEquals("Reminder check renews today", notification.extras.getString("android.title"))
         notification.contentIntent.send()
         ui.waitForIdle()
@@ -145,7 +152,8 @@ class BudgieFlowTest {
                 it.copy(preferences = it.preferences.copy(notifications = false))
             }
         }
-        manager.cancelAll()
+        ReminderScheduler.checkNow(app)
+        ui.waitUntil(20_000) { manager.activeNotifications.isEmpty() }
         // ActivityScenario matches lifecycle events against its original launch intent.
         instrumentation.runOnMainSync {
             launchedActivity.intent = originalIntent

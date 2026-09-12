@@ -66,7 +66,7 @@ object CollectionCodec {
                 Appearance.valueOf(settings.getString("appearance")),
                 settings.getBoolean("onboarded"),
             )
-        require(prefs.budgetMinor in 100..1_000_000_000L && prefs.reminderDays in 0..30)
+        require((prefs.budgetMinor == 0L || prefs.budgetMinor in 100..1_000_000_000L) && prefs.reminderDays in 0..30)
         val array = json.getJSONArray("subscriptions")
         require(array.length() <= 5000) { "This backup contains too many subscriptions." }
         val subscriptions =
@@ -111,7 +111,7 @@ object CollectionCodec {
             return "\"${safe.replace("\"","\"\"")}\""
         }
         return "Service,Plan,Amount,Currency,Billing cycle,Billing anchor,Next renewal,Category,Status,Notes\r\n" +
-            collection.subscriptions.joinToString("\r\n") { s ->
+            collection.onDate(LocalDate.now()).subscriptions.joinToString("\r\n") { s ->
                 listOf(
                         s.name,
                         s.plan,
@@ -119,7 +119,7 @@ object CollectionCodec {
                         "INR",
                         s.cycle.label,
                         s.anchorDate.toString(),
-                        s.nextRenewal().toString(),
+                        if (s.status == SubscriptionStatus.ARCHIVED) "" else s.nextRenewal().toString(),
                         s.category.label,
                         s.status.label,
                         s.notes,

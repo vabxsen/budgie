@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +35,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.vabxsen.budgie.auth.AccountViewModel
+import kotlinx.coroutines.launch
 import com.vabxsen.budgie.domain.*
 import com.vabxsen.budgie.ui.*
 import java.time.LocalDate
@@ -72,6 +75,10 @@ class MainActivity : ComponentActivity() {
         consumed: () -> Unit,
         vm: BudgieViewModel = viewModel(),
     ) {
+        val accountVm: AccountViewModel = viewModel()
+        val account by accountVm.state.collectAsStateWithLifecycle()
+        val accountScope = rememberCoroutineScope()
+        val focusManager = LocalFocusManager.current
         val result by vm.state.collectAsStateWithLifecycle()
         var today by remember { mutableStateOf(LocalDate.now()) }
         val collection = result?.getOrNull()?.onDate(today)
@@ -99,12 +106,12 @@ class MainActivity : ComponentActivity() {
         }
         var screen by rememberSaveable { mutableStateOf("home") }
         var parent by rememberSaveable { mutableStateOf("home") }
+        var remindersParent by rememberSaveable { mutableStateOf("home") }
         var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
         var editingId by rememberSaveable { mutableStateOf<String?>(null) }
         var confirmArchive by remember { mutableStateOf(false) }
         var confirmDiscard by remember { mutableStateOf(false) }
         var budgetDialog by remember { mutableStateOf(false) }
-        var sampleDialog by remember { mutableStateOf(false) }
         var imported by remember { mutableStateOf<BudgieCollection?>(null) }
         val snackbar = remember { SnackbarHostState() }
         LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
@@ -164,8 +171,11 @@ class MainActivity : ComponentActivity() {
         }
         val back: () -> Unit = {
             if (screen == "edit") {
-                if (!saving) confirmDiscard = true
-            } else if (screen == "reminders") screen = "home"
+                if (!saving) {
+                    focusManager.clearFocus()
+                    confirmDiscard = true
+                }
+            } else if (screen == "reminders") screen = remindersParent
             else screen = parent.takeIf { it !in listOf("edit", "detail") } ?: "home"
         }
         BackHandler(screen !in listOf("home")) {
@@ -232,7 +242,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     IconButton(
                                         onClick = {
-                                            parent = screen
+                                            remindersParent = screen
                                             screen = "reminders"
                                         }
                                     ) {
@@ -290,7 +300,7 @@ class MainActivity : ComponentActivity() {
                                 vm::retry,
                             )
                         !collection.preferences.onboarded ->
-                            WelcomeScreen({ vm.onboard(false) }, { sampleDialog = true })
+                            WelcomeScreen(vm::onboard)
                         screen == "home" ->
                             HomeScreen(
                                 collection,
@@ -341,6 +351,9 @@ class MainActivity : ComponentActivity() {
                                 { export.launch("Budgie-subscriptions-$today.csv") },
                                 { backup.launch("Budgie-backup-$today.json") },
                                 { restore.launch(arrayOf("application/json", "text/plain")) },
+                                account,
+                                { accountScope.launch { accountVm.signIn(this@MainActivity) } },
+                                { accountScope.launch { accountVm.signOut(this@MainActivity) } },
                             )
                         screen == "detail" -> {
                             val sub = collection.subscriptions.find { it.id == selectedId }
@@ -381,29 +394,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            if (sampleDialog)
-                AlertDialog(
-                    onDismissRequest = { sampleDialog = false },
-                    title = { Text("Take a little look around.") },
-                    text = {
-                        Text(
-                            "Explore Budgie with eight fictional subscriptions. Example prices are for demonstration only. You can archive them whenever you’re ready."
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                sampleDialog = false
-                                vm.onboard(true)
-                            }
-                        ) {
-                            Text("Load sample collection")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { sampleDialog = false }) { Text("Not now") }
-                    },
-                )
             if (confirmArchive)
                 AlertDialog(
                     onDismissRequest = { confirmArchive = false },
@@ -488,7 +478,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun BudgetDialog(current: Long, onClose: () -> Unit, onSave: (Long) -> Unit) {
     var amount by rememberSaveable {
-        mutableStateOf(current.toBigDecimal().movePointLeft(2).stripTrailingZeros().toPlainString())
+        mutableStateOf(if (current == 0L) "" else current.toBigDecimal().movePointLeft(2).stripTrailingZeros().toPlainString())
     }
     var error by remember { mutableStateOf(false) }
     AlertDialog(
@@ -522,6 +512,11 @@ private fun BudgetDialog(current: Long, onClose: () -> Unit, onSave: (Long) -> U
                 Text("Save budget")
             }
         },
-        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+        dismissButton = {
+            Row {
+                if (current > 0) TextButton(onClick = { onSave(0) }) { Text("Remove budget") }
+                TextButton(onClick = onClose) { Text("Cancel") }
+            }
+        },
     )
 }

@@ -17,6 +17,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vabxsen.budgie.R
+import com.vabxsen.budgie.BuildConfig
+import com.vabxsen.budgie.auth.AccountState
 import com.vabxsen.budgie.domain.*
 
 @Composable
@@ -30,6 +32,9 @@ fun SettingsScreen(
     onExport: () -> Unit,
     onBackup: () -> Unit,
     onImport: () -> Unit,
+    account: AccountState,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
 ) {
     var appearancePicker by remember { mutableStateOf(false) }
     var reminderPicker by remember { mutableStateOf(false) }
@@ -44,6 +49,7 @@ fun SettingsScreen(
                 "The small details that make Budgie yours.",
             )
         }
+        item { AccountSection(account, onSignIn, onSignOut) }
         item { Text("The everyday essentials", style = MaterialTheme.typography.titleLarge) }
         item {
             Column {
@@ -51,7 +57,7 @@ fun SettingsScreen(
                     Icons.Rounded.AccountBalanceWallet,
                     "Monthly budget",
                     "A little boundary for recurring spending.",
-                    money(prefs.budgetMinor),
+                    if (prefs.budgetMinor == 0L) "Not set" else money(prefs.budgetMinor),
                     onBudget,
                 )
                 SettingRow(
@@ -164,7 +170,7 @@ fun SettingsScreen(
                         fontSize = 14.sp,
                     )
                     HorizontalDivider(color = Pine.copy(alpha = .14f))
-                    Text("Budgie · Version 0.1.0", color = Pine.copy(alpha = .7f), fontSize = 12.sp)
+                    Text("Budgie · Version ${BuildConfig.VERSION_NAME}", color = Pine.copy(alpha = .7f), fontSize = 12.sp)
                 }
             }
         }
@@ -173,7 +179,7 @@ fun SettingsScreen(
                 Icon(Icons.Rounded.VerifiedUser, null, tint = colors.muted)
                 Text("Private by design.", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Your collection stays in this app’s private storage. No accounts, bank connections, analytics, or internet access. Exported backups contain your subscription details; choose a place you trust.",
+                    "Your collection stays in this app’s private storage. Optional Google sign-in sends account information to Google and Firebase for authentication. Subscription data is not uploaded. Exported backups contain your subscription details; choose a place you trust.",
                     color = colors.muted,
                     fontSize = 13.sp,
                 )
