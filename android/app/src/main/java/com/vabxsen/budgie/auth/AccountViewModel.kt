@@ -53,7 +53,7 @@ class AccountViewModel : ViewModel() {
             check(credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL)
             val token = GoogleIdTokenCredential.createFrom(credential.data).idToken
             auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
-            mutableState.update { it.copy(message = "You’re signed in. Your collection stays on this device.") }
+            mutableState.update { it.copy(message = "You’re signed in. Budgie is connecting your collection.") }
         } catch (_: GetCredentialCancellationException) {
             // Dismissing Google's picker is a normal user choice.
         } catch (cancelled: CancellationException) {
@@ -77,7 +77,7 @@ class AccountViewModel : ViewModel() {
         auth.signOut()
         try {
             CredentialManager.create(activity).clearCredentialState(ClearCredentialStateRequest())
-            mutableState.update { it.copy(message = "You’re signed out. Your subscriptions are still on this device.") }
+            mutableState.update { it.copy(message = "You’re signed out. Your account collection remains saved on this device.") }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 class BudgieViewModel(app: Application) : AndroidViewModel(app) {
     private val repository = (app as BudgieApplication).repository
     val state = repository.state
+    val syncState = repository.syncState
     private val mutableSaving = MutableStateFlow(false)
     val saving = mutableSaving.asStateFlow()
     private val messageChannel = Channel<String>(Channel.BUFFERED)

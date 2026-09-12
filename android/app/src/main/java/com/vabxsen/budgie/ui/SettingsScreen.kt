@@ -19,7 +19,9 @@ import androidx.compose.ui.unit.sp
 import com.vabxsen.budgie.R
 import com.vabxsen.budgie.BuildConfig
 import com.vabxsen.budgie.auth.AccountState
+import com.vabxsen.budgie.data.SyncState
 import com.vabxsen.budgie.domain.*
+import com.vabxsen.budgie.updates.UpdateUiState
 
 @Composable
 fun SettingsScreen(
@@ -35,6 +37,11 @@ fun SettingsScreen(
     account: AccountState,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
+    syncState: SyncState,
+    updateState: UpdateUiState,
+    onCheckForUpdates: () -> Unit,
+    onDownloadUpdate: () -> Unit,
+    onAllowUpdateInstalls: () -> Unit,
 ) {
     var appearancePicker by remember { mutableStateOf(false) }
     var reminderPicker by remember { mutableStateOf(false) }
@@ -49,7 +56,7 @@ fun SettingsScreen(
                 "The small details that make Budgie yours.",
             )
         }
-        item { AccountSection(account, onSignIn, onSignOut) }
+        item { AccountSection(account, onSignIn, onSignOut, syncState) }
         item { Text("The everyday essentials", style = MaterialTheme.typography.titleLarge) }
         item {
             Column {
@@ -150,6 +157,15 @@ fun SettingsScreen(
                 )
             }
         }
+        item { Text("Stay current", style = MaterialTheme.typography.titleLarge) }
+        item {
+            UpdateSection(
+                state = updateState,
+                onCheck = onCheckForUpdates,
+                onDownload = onDownloadUpdate,
+                onAllowInstalls = onAllowUpdateInstalls,
+            )
+        }
         item {
             Surface(color = Butter, shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(27.dp), verticalArrangement = Arrangement.spacedBy(19.dp)) {
@@ -179,7 +195,7 @@ fun SettingsScreen(
                 Icon(Icons.Rounded.VerifiedUser, null, tint = colors.muted)
                 Text("Private by design.", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Your collection stays in this app’s private storage. Optional Google sign-in sends account information to Google and Firebase for authentication. Subscription data is not uploaded. Exported backups contain your subscription details; choose a place you trust.",
+                    "Your collection stays in this app’s private storage. Optional Google sign-in sends account information to Google and Firebase for authentication. Update checks contact GitHub and downloads only a newer signed Budgie APK. Subscription data is not uploaded. Exported backups contain your subscription details; choose a place you trust.",
                     color = colors.muted,
                     fontSize = 13.sp,
                 )

@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,9 +21,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vabxsen.budgie.R
 import com.vabxsen.budgie.auth.AccountState
+import com.vabxsen.budgie.data.SyncState
+import com.vabxsen.budgie.data.SyncStatus
 
 @Composable
-fun AccountSection(state: AccountState, onSignIn: () -> Unit, onSignOut: () -> Unit) {
+fun AccountSection(
+    state: AccountState,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+    syncState: SyncState = SyncState(),
+) {
     var confirmSignOut by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Your Budgie account", style = MaterialTheme.typography.titleLarge)
@@ -37,10 +47,29 @@ fun AccountSection(state: AccountState, onSignIn: () -> Unit, onSignOut: () -> U
                     }
                 }
                 Text(
-                    if (state.profile == null) "Sign in with Google to add your account to Budgie. You can also keep using the app without signing in."
+                    if (state.profile == null)
+                        "Sign in with Google to keep this collection available across your Android devices."
                     else "Your Google account is connected to Budgie.",
                     color = Pine.copy(alpha = .85f), fontSize = 13.sp,
                 )
+                if (state.profile != null) {
+                    val (icon, label) =
+                        when (syncState.status) {
+                            SyncStatus.CONNECTING -> Icons.Rounded.CloudSync to "Connecting to your cloud collection…"
+                            SyncStatus.SYNCING -> Icons.Rounded.CloudSync to "Saving changes to your account…"
+                            SyncStatus.SYNCED -> Icons.Rounded.CloudDone to "Your collection is synced"
+                            SyncStatus.ERROR -> Icons.Rounded.CloudOff to
+                                (syncState.message ?: "Sync paused. Your changes are safe on this device.")
+                            SyncStatus.SIGNED_OUT -> Icons.Rounded.CloudSync to "Preparing account sync…"
+                        }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
+                        Icon(icon, null, Modifier.size(18.dp), tint = Pine.copy(alpha = .72f))
+                        Text(label, color = Pine.copy(alpha = .8f), fontSize = 12.sp)
+                    }
+                }
                 if (state.profile == null) {
                     OutlinedButton(
                         onClick = onSignIn, enabled = !state.busy,
@@ -60,7 +89,13 @@ fun AccountSection(state: AccountState, onSignIn: () -> Unit, onSignOut: () -> U
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Pine),
                     ) { Text(if (state.busy) "Signing out…" else "Sign out") }
                 }
-                Text("Subscriptions stay on this device. Cloud sync is not enabled.", color = Pine.copy(alpha = .75f), fontSize = 12.sp)
+                Text(
+                    if (state.profile == null)
+                        "You can keep using a separate, private workspace without signing in."
+                    else "Offline edits stay on this device and upload when you reconnect.",
+                    color = Pine.copy(alpha = .75f),
+                    fontSize = 12.sp,
+                )
             }
         }
         state.message?.let {
@@ -70,7 +105,7 @@ fun AccountSection(state: AccountState, onSignIn: () -> Unit, onSignOut: () -> U
     if (confirmSignOut) AlertDialog(
         onDismissRequest = { confirmSignOut = false },
         title = { Text("Sign out of Budgie?") },
-        text = { Text("Your subscriptions and reminders will stay on this device, accessible to anyone using this app.") },
+        text = { Text("Sync will pause and Budgie will return to the signed-out workspace. Your account collection remains saved on this device and in your account.") },
         confirmButton = { TextButton(onClick = { confirmSignOut = false; onSignOut() }) { Text("Sign out") } },
         dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Stay signed in") } },
     )

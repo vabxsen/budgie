@@ -1,0 +1,96 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // /users/{uid}/subscriptions/{subscriptionId}
+    //   Live document: schemaVersion, deleted, name, plan, priceMinor,
+    //   cycle, anchorDate, category, brand, status, reminderDays, notes,
+    //   createdDate, updatedAtMillis, updatedAt.
+    //   Tombstone: schemaVersion, deleted, updatedAtMillis, updatedAt.
+    // /users/{uid}/settings/preferences
+    //   schemaVersion, budgetMinor, reminderDays, notifications, appearance,
+    //   onboarded, updatedAtMillis, updatedAt.
+    // All paths contain private account data and are owner-readable only.
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function hasValidSyncFields(data) {
+      return data.schemaVersion == 1 &&
+        data.updatedAtMillis is int && data.updatedAtMillis > 0 &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidSubscription(data) {
+      let tombstoneFields = ['schemaVersion', 'deleted', 'updatedAtMillis', 'updatedAt'];
+      let liveFields = [
+        'schemaVersion', 'deleted', 'name', 'plan', 'priceMinor', 'cycle',
+        'anchorDate', 'category', 'brand', 'status', 'reminderDays', 'notes',
+        'createdDate', 'updatedAtMillis', 'updatedAt'
+      ];
+      return hasValidSyncFields(data) && data.deleted is bool &&
+        (
+          (data.deleted == true && data.keys().hasOnly(tombstoneFields)) ||
+          (data.deleted == false && data.keys().hasAll(liveFields) &&
+            data.keys().hasOnly(liveFields) &&
+            data.name is string && data.name.size() > 0 && data.name.size() <= 80 &&
+            data.plan is string && data.plan.size() <= 120 &&
+            data.priceMinor is int && data.priceMinor >= 1 && data.priceMinor <= 1000000000 &&
+            data.cycle in ['MONTHLY', 'YEARLY', 'WEEKLY'] &&
+            data.anchorDate is timestamp &&
+            data.category in ['ENTERTAINMENT', 'PRODUCTIVITY', 'MUSIC', 'STORAGE', 'OTHER'] &&
+            data.brand is string && data.brand.size() > 0 && data.brand.size() <= 80 &&
+            data.status in ['ACTIVE', 'TRIAL', 'ARCHIVED'] &&
+            data.reminderDays is int && data.reminderDays >= 0 && data.reminderDays <= 30 &&
+            data.notes is string && data.notes.size() <= 2000 &&
+            data.createdDate is timestamp)
+        );
+    }
+
+    function isValidPreferences(data) {
+      let fields = [
+        'schemaVersion', 'budgetMinor', 'reminderDays', 'notifications',
+        'appearance', 'onboarded', 'updatedAtMillis', 'updatedAt'
+      ];
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields) &&
+        hasValidSyncFields(data) &&
+        data.budgetMinor is int &&
+        (data.budgetMinor == 0 ||
+          (data.budgetMinor >= 100 && data.budgetMinor <= 1000000000)) &&
+        data.reminderDays is int && data.reminderDays >= 0 && data.reminderDays <= 30 &&
+        data.notifications is bool &&
+        data.appearance in ['SYSTEM', 'LIGHT', 'DARK'] &&
+        data.onboarded is bool;
+    }
+
+    match /users/{uid} {
+      allow read, write: if false;
+
+      match /subscriptions/{subscriptionId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && subscriptionId.size() > 0 &&
+          subscriptionId.size() <= 100 && isValidSubscription(request.resource.data);
+        allow update: if isOwner(uid) && subscriptionId.size() > 0 &&
+          subscriptionId.size() <= 100 && isValidSubscription(request.resource.data);
+        allow delete: if false;
+      }
+
+      match /settings/{settingsId} {
+        allow read: if isOwner(uid) && settingsId == 'preferences';
+        allow create: if isOwner(uid) && settingsId == 'preferences' &&
+          isValidPreferences(request.resource.data);
+        allow update: if isOwner(uid) && settingsId == 'preferences' &&
+          isValidPreferences(request.resource.data);
+        allow delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -31,6 +31,9 @@ class BudgieAuditTest {
     private fun click(text: String) = reveal(text).performScrollTo().performClick()
     private fun tab(text: String) = ui.onNodeWithText(text, useUnmergedTree = true).performClick()
     private fun editor(text: String) {
+        ui.waitUntil(5_000) {
+            ui.onAllNodesWithTag("subscription-editor").fetchSemanticsNodes().size == 1
+        }
         ui.onNodeWithTag("subscription-editor").performScrollToNode(hasText(text))
     }
     private fun input(label: String, value: String) {
@@ -103,6 +106,9 @@ class BudgieAuditTest {
         assertEquals("custom", sub.brand)
         assertEquals(0, sub.reminderDays)
         assertEquals("Entered by me", sub.notes)
+        ui.waitUntil(12_000) {
+            ui.onAllNodesWithText("My course saved. All in a good place.").fetchSemanticsNodes().isEmpty()
+        }
         click("Edit subscription")
         input("Service name", "Discarded name")
         ui.onNodeWithContentDescription("Back").performClick()

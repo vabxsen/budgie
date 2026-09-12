@@ -5,6 +5,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.vabxsen.budgie.auth.AccountProfile
 import com.vabxsen.budgie.auth.AccountState
+import com.vabxsen.budgie.data.SyncState
+import com.vabxsen.budgie.data.SyncStatus
 import com.vabxsen.budgie.ui.AccountSection
 import com.vabxsen.budgie.ui.BudgieTheme
 import com.vabxsen.budgie.domain.Appearance
@@ -17,12 +19,12 @@ import org.junit.runner.RunWith
 class AccountSectionTest {
     @get:Rule val ui = createComposeRule()
 
-    @Test fun signedOutOffersGoogleWithoutPromisingSync() {
+    @Test fun signedOutOffersGoogleAndExplainsAccountSync() {
         var attempts = 0
         ui.setContent { BudgieTheme(Appearance.LIGHT) { AccountSection(AccountState(), { attempts++ }, {}) } }
         ui.onNodeWithText("Sign in with Google").performClick()
         assertEquals(1, attempts)
-        ui.onNodeWithText("Subscriptions stay on this device. Cloud sync is not enabled.").assertIsDisplayed()
+        ui.onNodeWithText("Sign in with Google to keep this collection available across your Android devices.").assertIsDisplayed()
     }
 
     @Test fun busyStatePreventsDuplicateSignIn() {
@@ -41,6 +43,17 @@ class AccountSectionTest {
         ui.onNodeWithText("Sign out").performClick()
         ui.onNode(hasText("Sign out") and hasAnyAncestor(isDialog())).performClick()
         assertEquals(1, signedOut)
+    }
+
+    @Test fun signedInAccountShowsCompletedSync() {
+        val state = AccountState(profile = AccountProfile("Budgie tester", "tester@example.com"))
+        ui.setContent {
+            BudgieTheme(Appearance.LIGHT) {
+                AccountSection(state, {}, {}, SyncState(SyncStatus.SYNCED, 42L))
+            }
+        }
+        ui.onNodeWithText("Your collection is synced").assertIsDisplayed()
+        ui.onNodeWithText("Offline edits stay on this device and upload when you reconnect.").assertIsDisplayed()
     }
 
     @Test fun errorKeepsSignInAvailableForRetry() {

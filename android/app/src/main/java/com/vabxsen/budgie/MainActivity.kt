@@ -36,6 +36,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vabxsen.budgie.auth.AccountViewModel
+import com.vabxsen.budgie.updates.UpdateUiState
+import com.vabxsen.budgie.updates.UpdateViewModel
 import kotlinx.coroutines.launch
 import com.vabxsen.budgie.domain.*
 import com.vabxsen.budgie.ui.*
@@ -77,6 +79,9 @@ class MainActivity : ComponentActivity() {
     ) {
         val accountVm: AccountViewModel = viewModel()
         val account by accountVm.state.collectAsStateWithLifecycle()
+        val syncState by vm.syncState.collectAsStateWithLifecycle()
+        val updateVm: UpdateViewModel = viewModel()
+        val updateState by updateVm.state.collectAsStateWithLifecycle()
         val accountScope = rememberCoroutineScope()
         val focusManager = LocalFocusManager.current
         val result by vm.state.collectAsStateWithLifecycle()
@@ -93,6 +98,7 @@ class MainActivity : ComponentActivity() {
                     today = LocalDate.now()
                     permission =
                         NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled()
+                    updateVm.continueInstallIfAllowed(this@MainActivity)
                 }
             }
             lifecycle.lifecycle.addObserver(observer)
@@ -103,6 +109,9 @@ class MainActivity : ComponentActivity() {
                 delay(60_000)
                 today = LocalDate.now()
             }
+        }
+        LaunchedEffect(updateState) {
+            if (updateState is UpdateUiState.Ready) updateVm.installReady(this@MainActivity)
         }
         var screen by rememberSaveable { mutableStateOf("home") }
         var parent by rememberSaveable { mutableStateOf("home") }
@@ -354,6 +363,11 @@ class MainActivity : ComponentActivity() {
                                 account,
                                 { accountScope.launch { accountVm.signIn(this@MainActivity) } },
                                 { accountScope.launch { accountVm.signOut(this@MainActivity) } },
+                                syncState,
+                                updateState,
+                                updateVm::check,
+                                updateVm::download,
+                                { updateVm.openInstallPermission(this@MainActivity) },
                             )
                         screen == "detail" -> {
                             val sub = collection.subscriptions.find { it.id == selectedId }
