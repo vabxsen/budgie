@@ -39,6 +39,11 @@ import {
   GridFour,
   SignOut,
   PlayCircle,
+  UserCircle,
+  GoogleLogo,
+  EnvelopeSimple,
+  LockKey,
+  ArrowsClockwise,
 } from "@phosphor-icons/react";
 import {
   siNetflix,
@@ -1191,6 +1196,40 @@ function App() {
         />
         <div className="settings-layout">
           <div>
+            <section className="settings-section account-settings">
+              <h2>Your Budgie account</h2>
+              <div className="account-card">
+                <div className="account-mark" aria-hidden="true">
+                  <Bird size={36} weight="fill" />
+                </div>
+                <div className="account-copy">
+                  <span>LOCAL MODE</span>
+                  <h3>Take your collection with you.</h3>
+                  <p>
+                    Sign in to keep your subscriptions within reach across the
+                    website and Android app.
+                  </p>
+                  <div
+                    className="account-benefits"
+                    aria-label="Account benefits"
+                  >
+                    <span>
+                      <ArrowsClockwise size={15} /> Sync across devices
+                    </span>
+                    <span>
+                      <ShieldCheck size={15} /> Your private collection
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  className="account-action"
+                  icon={UserCircle}
+                  onClick={() => setModal({ type: "auth" })}
+                >
+                  Sign in
+                </Button>
+              </div>
+            </section>
             <section className="settings-section">
               <h2>The everyday essentials</h2>
               <Setting
@@ -1325,8 +1364,8 @@ function App() {
               <h3>Private by design.</h3>
               <p>
                 This interactive preview stores your collection locally in this
-                browser. No bank connections, no accounts, no data sent to a
-                server.
+                browser. The sign-in experience is a preview until Firebase is
+                connected, so no account data is sent to a server yet.
               </p>
               <p>
                 Example prices and dates are sample data, anchored to September
@@ -1495,7 +1534,9 @@ function App() {
                   ? "A little breathing room."
                   : modal.type === "restore"
                     ? "Restore your collection?"
-                    : "Archive subscription?"
+                    : modal.type === "auth"
+                      ? "Welcome to your collection."
+                      : "Archive subscription?"
           }
         >
           {modal.type === "edit" ? (
@@ -1546,6 +1587,8 @@ function App() {
                 </Button>
               </div>
             </>
+          ) : modal.type === "auth" ? (
+            <AuthForm />
           ) : (
             <>
               <p className="modal-copy">
@@ -1580,6 +1623,115 @@ function App() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+function AuthForm() {
+  const [mode, setMode] = useState("signin");
+  const [message, setMessage] = useState("");
+  const previewAuth = () =>
+    setMessage(
+      "Account access will turn on when Firebase is connected. Your collection is still private in this browser.",
+    );
+  return (
+    <div className="auth-panel">
+      <p className="modal-copy">
+        {mode === "signin"
+          ? "Sign in to see the same collection wherever Budgie goes with you."
+          : "Create an account for one collection shared between web and Android."}
+      </p>
+      <div className="auth-mode" role="group" aria-label="Account action">
+        <button
+          type="button"
+          className={mode === "signin" ? "active" : ""}
+          aria-pressed={mode === "signin"}
+          onClick={() => {
+            setMode("signin");
+            setMessage("");
+          }}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          className={mode === "signup" ? "active" : ""}
+          aria-pressed={mode === "signup"}
+          onClick={() => {
+            setMode("signup");
+            setMessage("");
+          }}
+        >
+          Create account
+        </button>
+      </div>
+      <Button
+        variant="secondary auth-provider"
+        icon={GoogleLogo}
+        type="button"
+        onClick={previewAuth}
+      >
+        Continue with Google
+      </Button>
+      <div className="auth-divider" aria-hidden="true">
+        <span>or continue with email</span>
+      </div>
+      <form
+        className="auth-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          previewAuth();
+        }}
+      >
+        <label htmlFor="account-email">
+          Email address
+          <span className="auth-input">
+            <EnvelopeSimple size={18} aria-hidden="true" />
+            <input
+              id="account-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              required
+            />
+          </span>
+        </label>
+        <label htmlFor="account-password">
+          Password
+          <span className="auth-input">
+            <LockKey size={18} aria-hidden="true" />
+            <input
+              id="account-password"
+              name="password"
+              type="password"
+              autoComplete={
+                mode === "signin" ? "current-password" : "new-password"
+              }
+              minLength={8}
+              required
+            />
+          </span>
+        </label>
+        {mode === "signin" && (
+          <button className="auth-link" type="button" onClick={previewAuth}>
+            Forgot password?
+          </button>
+        )}
+        <Button className="auth-submit" type="submit">
+          {mode === "signin" ? "Sign in with email" : "Create my account"}
+          <ArrowRight size={17} aria-hidden="true" />
+        </Button>
+      </form>
+      {message && (
+        <div className="auth-message" role="status" aria-live="polite">
+          <ShieldCheck size={18} aria-hidden="true" />
+          <span>{message}</span>
+        </div>
+      )}
+      <p className="auth-terms">
+        Account creation will include Budgie’s terms and privacy policy when
+        sign-in launches.
+      </p>
     </div>
   );
 }

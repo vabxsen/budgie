@@ -24,12 +24,13 @@ npm run build
 - Navigable billing calendar with monthly, yearly and weekly recurrence handling.
 - Category analytics and projections calculated from the active collection.
 - Reminder preferences, light/dark appearance and editable budget.
+- Account and sign-in UI prepared for Firebase authentication.
 - CSV export and JSON backup/import of subscriptions.
 - Local browser persistence, accessible dialogs, keyboard controls and reduced-motion support.
 
 ## Preview boundaries
 
-All starting subscriptions, prices and dates are fictional sample data. The demo clock is September 12, 2026 so the reference dates remain coherent. Spending projections are estimates based on current active rates. The browser preview does not schedule Android notifications, connect bank accounts, charge money or cancel provider subscriptions. Reminder controls save preferences only. JSON restoration replaces subscriptions; preferences are retained.
+All starting subscriptions, prices and dates are fictional sample data. The demo clock is September 12, 2026 so the reference dates remain coherent. Spending projections are estimates based on current active rates. The browser preview does not schedule Android notifications, connect bank accounts, charge money or cancel provider subscriptions. The sign-in controls show the planned account experience without creating an account or sending credentials. Reminder controls save preferences only. JSON restoration replaces subscriptions; preferences are retained.
 
 Fonts are bundled locally using Fontsource. UI icons use Phosphor; available service marks use Simple Icons. Prime Video uses a generic playback icon. No remote tracking scripts or API credentials are included.
 

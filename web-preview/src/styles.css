@@ -1739,6 +1739,84 @@ main {
   font-size: 23px;
   margin-bottom: 5px;
 }
+.account-settings {
+  margin-bottom: 34px;
+}
+.account-card {
+  margin-top: 15px;
+  padding: 25px;
+  border-radius: 16px;
+  background: var(--yellow);
+  color: #292f27;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+  position: relative;
+}
+.account-card::after {
+  content: "";
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  right: -76px;
+  top: -92px;
+  border: 1px solid #60663d2b;
+  border-radius: 50%;
+}
+.account-mark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  background: #292f27;
+  color: var(--yellow);
+  border-radius: 50%;
+  transform: rotate(-8deg);
+}
+.account-copy {
+  min-width: 0;
+}
+.account-copy > span {
+  font-size: 8px;
+  letter-spacing: 1.25px;
+  color: #74734f;
+  font-weight: 650;
+}
+.account-copy h3 {
+  font-size: 22px;
+  margin-top: 6px;
+}
+.account-copy > p {
+  max-width: 450px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #6e6c4c;
+  margin-top: 7px;
+}
+.account-benefits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 16px;
+  margin-top: 13px;
+}
+.account-benefits span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  color: #55583c;
+}
+.account-action.button {
+  background: #292f27;
+  color: white;
+  position: relative;
+  z-index: 1;
+}
+.account-action.button:hover {
+  background: #3b4437;
+}
 .setting-row {
   display: flex;
   align-items: center;
@@ -1869,6 +1947,125 @@ main {
   font-size: 12px;
   color: var(--muted);
   margin: 12px 0 22px;
+}
+.auth-panel {
+  margin-top: 18px;
+}
+.auth-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--soft);
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.auth-mode button {
+  min-height: 44px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.auth-mode button.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 2px 12px #1f271710;
+  font-weight: 600;
+}
+.auth-provider.button {
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 16px;
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin: 3px 0 18px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--line);
+  flex: 1;
+}
+.auth-form {
+  display: grid;
+  gap: 15px;
+}
+.auth-form > label {
+  display: grid;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 550;
+}
+.auth-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.auth-input:focus-within {
+  outline: 2px solid #a19946;
+  outline-offset: 2px;
+}
+.auth-input input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  min-height: 46px;
+  outline: 0;
+  font-size: 13px;
+}
+.auth-input input::placeholder {
+  color: var(--muted);
+  opacity: 0.72;
+}
+.auth-link {
+  justify-self: end;
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.auth-submit.button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 2px;
+}
+.auth-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 13px;
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 16px;
+}
+.auth-message svg {
+  color: #829571;
+  margin-top: 1px;
+}
+.auth-terms {
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+  margin-top: 16px;
 }
 .subscription-form > label,
 .form-pair > label {
@@ -2499,6 +2696,26 @@ main {
 }
 .mobile-preview .settings-layout {
   grid-template-columns: 1fr;
+}
+.mobile-preview .modal {
+  width: 390px;
+  max-width: calc(100vw - 36px);
+  max-height: calc(100dvh - 36px);
+}
+.mobile-preview .account-card {
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 20px;
+}
+.mobile-preview .account-mark {
+  width: 52px;
+  height: 52px;
+}
+.mobile-preview .account-copy h3 {
+  font-size: 19px;
+}
+.mobile-preview .account-action {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 .mobile-preview .setting-row {
   gap: 10px;

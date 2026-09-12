@@ -454,6 +454,21 @@
   .app-shell .setting-row {
     gap: 10px;
   }
+  .app-shell .account-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 20px;
+  }
+  .app-shell .account-mark {
+    width: 52px;
+    height: 52px;
+  }
+  .app-shell .account-copy h3 {
+    font-size: 19px;
+  }
+  .app-shell .account-action {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
   .app-shell .setting-row p {
     font-size: 9px;
     max-width: 170px;
