@@ -19,9 +19,9 @@ Amounts currently use INR. Spending is a forecast based on manually entered plan
 
 ## Open and build
 
-Open this directory in Android Studio. Use JDK 17 or 21, Android SDK 36, and an SDK path in your own ignored `local.properties` (Android Studio normally creates it). On Windows a path can be written `sdk.dir=C\:/Android/Sdk`.
+Open this directory in Android Studio. Use JDK 17 or 21, Android SDK 37, and an SDK path in your own ignored `local.properties` (Android Studio normally creates it). On Windows a path can be written `sdk.dir=C\:/Android/Sdk`.
 
-Keep `GRADLE_USER_HOME` outside OneDrive, for example `%USERPROFILE%\.gradle`. The wrapper uses Gradle 8.14.5. AGP and Compose dependencies are pinned in the Gradle files.
+Keep `GRADLE_USER_HOME` outside OneDrive, for example `%USERPROFILE%\.gradle`. The wrapper uses Gradle 9.6.0 with Android Gradle Plugin 9.4, which compiles Kotlin itself (there is no separate Kotlin Android plugin). AGP and Compose dependencies are pinned in the Gradle files.
 
 ```powershell
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
@@ -34,7 +34,7 @@ Device tests require an unlocked Android emulator or test phone. They replace Bu
 - Package: `com.vabxsen.budgie`
 - Version: `1.0.2` / code `3`
 - Minimum Android: 8.0 / API 26
-- Compile and target SDK: 36
+- Compile SDK: 37; target SDK: 36
 - Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
 - Release build: optimized by R8 and signed automatically when the private key settings are available (see [Release signing](#release-signing)); otherwise unsigned. No signing secrets are included.
 
