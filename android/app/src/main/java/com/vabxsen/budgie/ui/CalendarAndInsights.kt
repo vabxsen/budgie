@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -126,7 +127,9 @@ fun CalendarScreen(collection: BudgieCollection, today: LocalDate, onOpen: (Subs
                                                 selected = if (selected == day) 0 else day
                                             }
                                             .semantics {
-                                                contentDescription = "$date, ${due.size} payments"
+                                                contentDescription =
+                                                    "${date.format(LongDate)}, ${plural(due.size, "payment")}"
+                                                this.selected = selected == day
                                             }
                                             .padding(vertical = 7.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -178,7 +181,7 @@ fun CalendarScreen(collection: BudgieCollection, today: LocalDate, onOpen: (Subs
                         fontSize = 35.sp,
                     )
                     Text(
-                        "${renewals.size} renewals this month",
+                        "${plural(renewals.size, "renewal")} this month",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.muted,
                     )
@@ -341,12 +344,14 @@ fun InsightsScreen(
                         ) {
                             Canvas(Modifier.fillMaxSize().padding(10.dp)) {
                                 var start = -90f
+                                val gap = if (grouped.size > 1) 1.5f else 0f
                                 grouped.forEach { (category, amount) ->
                                     val sweep = amount.toFloat() / total.toFloat() * 360f
+                                    // Slices thinner than the gap skip it instead of drawing backwards.
                                     drawArc(
                                         categoryColor(category),
                                         start,
-                                        sweep - 1.5f,
+                                        if (sweep > gap * 2) sweep - gap else sweep,
                                         false,
                                         style = Stroke(25.dp.toPx()),
                                     )
@@ -362,7 +367,8 @@ fun InsightsScreen(
                                 Text("subscriptions", fontSize = 11.sp, color = colors.muted)
                             }
                         }
-                        grouped.forEach { (c, amount) ->
+                        val shares = percentShares(grouped.map { it.second })
+                        grouped.forEachIndexed { index, (c, amount) ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -374,7 +380,7 @@ fun InsightsScreen(
                                     fontSize = 13.sp,
                                 )
                                 Text(
-                                    "${(amount.toFloat()/total.toFloat()*100).toInt()}%",
+                                    "${shares[index]}%",
                                     fontSize = 11.sp,
                                     color = colors.muted,
                                 )
@@ -480,8 +486,9 @@ fun RemindersScreen(
                         Column(Modifier.weight(1f)) {
                             Text(s.name, style = MaterialTheme.typography.titleMedium)
                             Text(
-                                if (days == 0L) "Renews today"
-                                else "In $days days · ${date.format(ShortDate)}",
+                                if (days == 0L) {
+                                    if (s.status == SubscriptionStatus.TRIAL) "Trial ends today" else "Renews today"
+                                } else "${inDays(days)} · ${date.format(ShortDate)}",
                                 fontSize = 12.sp,
                                 color = colors.muted,
                             )
@@ -501,7 +508,7 @@ fun RemindersScreen(
                         )
                         Text(
                             if (s.reminderDays == 0) "Reminder on the renewal day"
-                            else "Reminder ${s.reminderDays} days before renewal",
+                            else "Reminder ${plural(s.reminderDays, "day")} before renewal",
                             fontSize = 11.sp,
                             color = colors.muted,
                         )

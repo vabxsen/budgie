@@ -120,6 +120,7 @@ class MainActivity : ComponentActivity() {
         var editingId by rememberSaveable { mutableStateOf<String?>(null) }
         var confirmArchive by remember { mutableStateOf(false) }
         var confirmDiscard by remember { mutableStateOf(false) }
+        var editorDirty by rememberSaveable { mutableStateOf(false) }
         var budgetDialog by remember { mutableStateOf(false) }
         var imported by remember { mutableStateOf<BudgieCollection?>(null) }
         val snackbar = remember { SnackbarHostState() }
@@ -171,7 +172,13 @@ class MainActivity : ComponentActivity() {
         val add: () -> Unit = {
             parent = screen
             editingId = null
+            editorDirty = false
             screen = "edit"
+        }
+        val leaveEditor: () -> Unit = {
+            confirmDiscard = false
+            editorDirty = false
+            screen = if (editingId != null) "detail" else parent
         }
         val open: (Subscription) -> Unit = { s ->
             parent = screen
@@ -182,13 +189,13 @@ class MainActivity : ComponentActivity() {
             if (screen == "edit") {
                 if (!saving) {
                     focusManager.clearFocus()
-                    confirmDiscard = true
+                    if (editorDirty) confirmDiscard = true else leaveEditor()
                 }
             } else if (screen == "reminders") screen = remindersParent
             else screen = parent.takeIf { it !in listOf("edit", "detail") } ?: "home"
         }
         BackHandler(screen !in listOf("home")) {
-            if (screen in listOf("edit", "detail")) back() else screen = "home"
+            if (screen in listOf("edit", "detail", "reminders")) back() else screen = "home"
         }
         LaunchedEffect(openId, collection) {
             if (openId != null && collection != null) {
@@ -320,6 +327,7 @@ class MainActivity : ComponentActivity() {
                                 { screen = "calendar" },
                                 { screen = "insights" },
                                 { budgetDialog = true },
+                                signedIn = account.profile != null,
                             )
                         screen == "collection" -> CollectionScreen(collection, today, add, open)
                         screen == "calendar" -> CalendarScreen(collection, today, open)
@@ -377,6 +385,7 @@ class MainActivity : ComponentActivity() {
                                     today,
                                     {
                                         editingId = sub.id
+                                        editorDirty = false
                                         screen = "edit"
                                     },
                                     {
@@ -399,8 +408,10 @@ class MainActivity : ComponentActivity() {
                                 collection.preferences.reminderDays,
                                 today,
                                 saving,
+                                onDirtyChange = { editorDirty = it },
                             ) { sub ->
                                 vm.save(sub) {
+                                    editorDirty = false
                                     selectedId = sub.id
                                     screen = "detail"
                                 }
@@ -443,10 +454,7 @@ class MainActivity : ComponentActivity() {
                     text = { Text("Unsaved changes will be discarded.") },
                     confirmButton = {
                         TextButton(
-                            onClick = {
-                                confirmDiscard = false
-                                screen = if (editingId != null) "detail" else parent
-                            }
+                            onClick = leaveEditor
                         ) {
                             Text("Discard changes")
                         }
@@ -461,7 +469,9 @@ class MainActivity : ComponentActivity() {
                     title = { Text("Restore your collection?") },
                     text = {
                         Text(
-                            "Replace your current subscriptions with ${imported!!.subscriptions.size} subscriptions from this backup? Export your current collection first if you want to keep a copy."
+                            "Replace your current subscriptions with ${imported!!.subscriptions.size} subscriptions from this backup? Export your current collection first if you want to keep a copy." +
+                                if (account.profile != null) " Because you’re signed in, this also replaces them on your other devices."
+                                else ""
                         )
                     },
                     confirmButton = {

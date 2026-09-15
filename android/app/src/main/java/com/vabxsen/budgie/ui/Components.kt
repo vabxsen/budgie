@@ -24,6 +24,17 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 val ShortDate: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
+val LongDate: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy")
+
+/** "Today", "Tomorrow" or "In 5 days". */
+fun inDays(days: Long): String =
+    when (days) {
+        0L -> "Today"
+        1L -> "Tomorrow"
+        else -> "In $days days"
+    }
+
+fun plural(count: Int, one: String, many: String = "${one}s") = "$count ${if (count == 1) one else many}"
 
 fun categoryColor(category: Category) =
     when (category) {
@@ -290,7 +301,9 @@ fun SubscriptionRow(
 
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
+    // The selectable overload tells TalkBack which option is chosen.
     Surface(
+        selected = selected,
         onClick = onClick,
         shape = RoundedCornerShape(9.dp),
         color = if (selected) Butter else colors.soft,

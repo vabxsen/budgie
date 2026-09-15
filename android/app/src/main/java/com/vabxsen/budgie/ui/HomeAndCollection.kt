@@ -20,7 +20,11 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vabxsen.budgie.R
@@ -39,6 +43,7 @@ fun HomeScreen(
     onCalendar: () -> Unit,
     onInsights: () -> Unit,
     onBudget: () -> Unit,
+    signedIn: Boolean = false,
 ) {
     val active = collection.subscriptions.filter { it.status == SubscriptionStatus.ACTIVE }
     val upcoming =
@@ -83,7 +88,7 @@ fun HomeScreen(
                                     TextButton(
                                         onClick = { yearly = value },
                                         contentPadding = PaddingValues(horizontal = 9.dp),
-                                        modifier = Modifier.height(36.dp),
+                                        modifier = Modifier.height(36.dp).semantics { selected = value == yearly },
                                         colors =
                                             ButtonDefaults.textButtonColors(contentColor = Pine),
                                     ) {
@@ -101,12 +106,12 @@ fun HomeScreen(
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(
+                            // Large totals shrink to fit instead of being cut off.
+                            BasicText(
                                 money(if (yearly) total * 12.toBigDecimal() else total),
-                                style = MaterialTheme.typography.displayLarge,
-                                color = Pine,
+                                style = MaterialTheme.typography.displayLarge.copy(color = Pine),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 54.sp),
                             )
                             Text(
                                 if (yearly) "per year · current estimate" else "per month",
@@ -223,7 +228,8 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.width(9.dp))
                 Text(
-                    "A space that’s just yours. Stored on your device.",
+                    if (signedIn) "A space that’s just yours. Synced privately to your account."
+                    else "A space that’s just yours. Stored on this device.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.muted,
                 )
@@ -236,12 +242,11 @@ fun HomeScreen(
 private fun MiniStat(label: String, value: String, caption: String, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, fontSize = 11.sp, color = colors.muted)
-        Text(
+        BasicText(
             value,
-            fontFamily = DisplayFont,
-            fontSize = 22.sp,
+            style = TextStyle(fontFamily = DisplayFont, fontSize = 22.sp, color = colors.ink),
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 22.sp),
         )
         Text(caption, fontSize = 10.sp, color = colors.muted)
     }

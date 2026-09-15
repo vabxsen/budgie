@@ -69,9 +69,24 @@ class SubscriptionTest {
     fun parseAmountsRejectsOverprecisionZeroAndInvalidInput() {
         assertEquals(12345L, parseAmount("123.45"))
         assertEquals(10L, parseAmount("0.10"))
-        listOf("", "0", "-1", "2.001", "NaN", "1000000000000").forEach {
+        listOf("", "0", "-1", "2.001", "NaN", "1000000000000", "9,99", "1,2,3").forEach {
             assertNull(parseAmount(it))
         }
+    }
+
+    @Test
+    fun parseAmountsAcceptsDigitGroupingAndTheRupeeSign() {
+        assertEquals(129900L, parseAmount("1,299"))
+        assertEquals(12345678L, parseAmount("1,23,456.78"))
+        assertEquals(12345678L, parseAmount("123,456.78"))
+        assertEquals(64900L, parseAmount("₹ 649"))
+    }
+
+    @Test
+    fun percentSharesAlwaysAddUpToOneHundred() {
+        assertEquals(listOf(34, 33, 33), percentShares(List(3) { BigDecimal.ONE }))
+        assertEquals(listOf(100, 0), percentShares(listOf(BigDecimal("99999"), BigDecimal.ONE)))
+        assertEquals(listOf(0, 0), percentShares(listOf(BigDecimal.ZERO, BigDecimal.ZERO)))
     }
 
     @Test

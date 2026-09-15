@@ -11,6 +11,7 @@ import com.vabxsen.budgie.notifications.ReminderScheduler
 import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,6 +19,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BudgieFlowTest {
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
+    @Before fun signedOut() = assumeSignedOut()
     private val app
         get() = ui.activity.application as BudgieApplication
 

@@ -113,7 +113,7 @@ fun SettingsScreen(
                     "Default reminder",
                     "Used for new subscriptions.",
                     if (prefs.reminderDays == 0) "On the day"
-                    else "${prefs.reminderDays} days before",
+                    else "${plural(prefs.reminderDays, "day")} before",
                     { reminderPicker = true },
                 )
                 SettingRow(
@@ -195,7 +195,7 @@ fun SettingsScreen(
                 Icon(Icons.Rounded.VerifiedUser, null, tint = colors.muted)
                 Text("Private by design.", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Your collection stays in this app’s private storage. Optional Google sign-in sends account information to Google and Firebase for authentication. Update checks contact GitHub and downloads only a newer signed Budgie APK. Subscription data is not uploaded. Exported backups contain your subscription details; choose a place you trust.",
+                    "Budgie keeps your collection in this app’s private storage. If you sign in with Google, your subscriptions and settings are also saved to your private Budgie account on Firebase so they sync between your devices; only you can read them. Reminder permission stays on each device. Update checks contact GitHub and install only a newer Budgie APK signed with the same key. Exported backups contain your subscription details, so choose a place you trust.",
                     color = colors.muted,
                     fontSize = 13.sp,
                 )
@@ -255,7 +255,7 @@ fun SettingsScreen(
                                     reminderPicker = false
                                 },
                             )
-                            Text(if (d == 0) "On renewal day" else "$d days before")
+                            Text(if (d == 0) "On renewal day" else "${plural(d, "day")} before")
                         }
                     }
                 }

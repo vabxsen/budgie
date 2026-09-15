@@ -100,8 +100,11 @@ class FirestoreCollectionMapperTest {
                 subscriptionTimes = mutableMapOf("live" to 10L),
                 deletedTimes = mutableMapOf("gone" to 20L),
                 preferencesTime = 30L,
+                pendingClaim = true,
             )
         assertEquals(expected, SyncMetadataCodec.decode(SyncMetadataCodec.encode(expected)))
+        val savedBeforeClaims = """{"version":1,"preferencesTime":5,"subscriptionTimes":{},"deletedTimes":{}}"""
+        assertEquals(false, SyncMetadataCodec.decode(savedBeforeClaims).pendingClaim)
     }
 
     private fun LocalDate.timestamp() =

@@ -12,6 +12,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,6 +20,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BudgieAuditTest {
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
+    @Before fun signedOut() = assumeSignedOut()
     private val app get() = ui.activity.application as BudgieApplication
     private val today = LocalDate.now()
     private fun collection() = app.repository.state.value!!.getOrThrow()
@@ -148,9 +150,10 @@ class BudgieAuditTest {
         click("Due today")
         ui.onNodeWithContentDescription("Back").performClick()
         ui.onNodeWithText("A date with your dues.").assertIsDisplayed()
-        ui.onNodeWithContentDescription("$today, 1 payments").performScrollTo().performClick()
+        ui.onNodeWithContentDescription("${today.format(DateTimeFormatter.ofPattern("d MMMM yyyy"))}, 1 payment")
+            .performScrollTo().performClick()
         click("Show all")
-        ui.onNodeWithText("1 renewals this month").performScrollTo().assertIsDisplayed()
+        ui.onNodeWithText("1 renewal this month").performScrollTo().assertIsDisplayed()
         ui.onNodeWithContentDescription("Open reminders").performClick()
         ui.onNodeWithContentDescription("Back").performClick()
         ui.onNodeWithText("A date with your dues.").assertIsDisplayed()
@@ -262,7 +265,7 @@ class BudgieAuditTest {
         assertEquals(Appearance.SYSTEM, collection().preferences.appearance)
         for (days in listOf(0, 1, 3, 7)) {
             click("Default reminder")
-            val label = if (days == 0) "On renewal day" else "$days days before"
+            val label = if (days == 0) "On renewal day" else "$days ${if (days == 1) "day" else "days"} before"
             ui.onNode(hasText(label) and hasAnyAncestor(isDialog())).performClick()
             ui.waitUntil(5_000) { collection().preferences.reminderDays == days }
         }

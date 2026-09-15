@@ -85,4 +85,8 @@ class CollectionCodecTest {
         }
     }
 
+    @Test fun csvStartsWithAByteOrderMarkForSpreadsheets() {
+        assertTrue(CollectionCodec.csv(collection).startsWith("${Char(0xFEFF)}Service,"))
+    }
+
 }

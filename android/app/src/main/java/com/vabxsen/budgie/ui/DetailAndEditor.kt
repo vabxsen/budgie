@@ -93,7 +93,7 @@ fun DetailScreen(sub: Subscription, today: LocalDate, onEdit: () -> Unit, onArch
                         )
                     }
                     Text(
-                        if (days == 0L) "Today" else "In $days days",
+                        inDays(days),
                         color = Pine,
                         fontSize = 12.sp,
                     )
@@ -108,7 +108,7 @@ fun DetailScreen(sub: Subscription, today: LocalDate, onEdit: () -> Unit, onArch
                 DetailField(
                     "Reminder",
                     if (sub.reminderDays == 0) "On renewal day"
-                    else "${sub.reminderDays} days before",
+                    else "${plural(sub.reminderDays, "day")} before",
                 )
                 DetailField(
                     "Tracking since",
@@ -181,40 +181,57 @@ fun EditorScreen(
     defaultReminder: Int,
     today: LocalDate,
     saving: Boolean = false,
+    onDirtyChange: (Boolean) -> Unit = {},
     onSave: (Subscription) -> Unit,
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }
-    var plan by rememberSaveable { mutableStateOf(existing?.plan ?: "") }
-    var amount by rememberSaveable {
-        mutableStateOf(
-            existing
-                ?.priceMinor
-                ?.toBigDecimal()
-                ?.movePointLeft(2)
-                ?.stripTrailingZeros()
-                ?.toPlainString() ?: ""
-        )
-    }
-    var cycleName by rememberSaveable {
-        mutableStateOf(existing?.cycle?.name ?: BillingCycle.MONTHLY.name)
-    }
-    var dateText by rememberSaveable {
-        mutableStateOf((existing?.anchorDate ?: today.plusDays(1)).toString())
-    }
-    var categoryName by rememberSaveable {
-        mutableStateOf(existing?.category?.name ?: Category.OTHER.name)
-    }
-    var brand by rememberSaveable { mutableStateOf(existing?.brand ?: "custom") }
-    var reminder by rememberSaveable {
-        mutableIntStateOf(existing?.reminderDays ?: defaultReminder)
-    }
-    var trial by rememberSaveable { mutableStateOf(existing?.status == SubscriptionStatus.TRIAL) }
-    var notes by rememberSaveable { mutableStateOf(existing?.notes ?: "") }
+    val initial = rememberSaveable(existing?.id) { EditorForm.from(existing, defaultReminder, today) }
+    var name by rememberSaveable { mutableStateOf(initial.name) }
+    var plan by rememberSaveable { mutableStateOf(initial.plan) }
+    var amount by rememberSaveable { mutableStateOf(initial.amount) }
+    var cycleName by rememberSaveable { mutableStateOf(initial.cycleName) }
+    var dateText by rememberSaveable { mutableStateOf(initial.dateText) }
+    var categoryName by rememberSaveable { mutableStateOf(initial.categoryName) }
+    var brand by rememberSaveable { mutableStateOf(initial.brand) }
+    var reminder by rememberSaveable { mutableIntStateOf(initial.reminder) }
+    var trial by rememberSaveable { mutableStateOf(initial.trial) }
+    var notes by rememberSaveable { mutableStateOf(initial.notes) }
     var error by rememberSaveable { mutableStateOf("") }
+    var pickingDate by rememberSaveable { mutableStateOf(false) }
     val date = LocalDate.parse(dateText)
+    val dark = colors.dark
+    val dirty =
+        EditorForm(name, plan, amount, cycleName, dateText, categoryName, brand, reminder, trial, notes) != initial
+    LaunchedEffect(dirty) { onDirtyChange(dirty) }
+    if (pickingDate) {
+        // Shown from composition, so rotation dismisses it cleanly and shows it again afterwards.
+        DisposableEffect(Unit) {
+            val zone = java.time.ZoneId.systemDefault()
+            val dialog =
+                DatePickerDialog(
+                        context,
+                        // Follow Budgie's own appearance setting rather than the system theme.
+                        if (dark) android.R.style.Theme_Material_Dialog
+                        else android.R.style.Theme_Material_Light_Dialog,
+                        { _, y, m, d -> dateText = LocalDate.of(y, m + 1, d).toString() },
+                        date.year,
+                        date.monthValue - 1,
+                        date.dayOfMonth,
+                    )
+                    .apply {
+                        datePicker.minDate = LocalDate.of(1900, 1, 1).atStartOfDay(zone).toInstant().toEpochMilli()
+                        datePicker.maxDate = LocalDate.of(2200, 12, 31).atStartOfDay(zone).toInstant().toEpochMilli()
+                        setOnDismissListener { pickingDate = false }
+                    }
+            dialog.show()
+            onDispose {
+                dialog.setOnDismissListener(null)
+                dialog.dismiss()
+            }
+        }
+    }
     LazyColumn(
         contentPadding = PaddingValues(22.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -312,28 +329,7 @@ fun EditorScreen(
                     fontSize = 13.sp,
                 )
                 OutlinedButton(
-                    onClick = {
-                        DatePickerDialog(
-                                context,
-                                { _, y, m, d -> dateText = LocalDate.of(y, m + 1, d).toString() },
-                                date.year,
-                                date.monthValue - 1,
-                                date.dayOfMonth,
-                            )
-                            .apply {
-                                datePicker.minDate =
-                                    LocalDate.of(1900, 1, 1)
-                                        .atStartOfDay(java.time.ZoneId.systemDefault())
-                                        .toInstant()
-                                        .toEpochMilli()
-                                datePicker.maxDate =
-                                    LocalDate.of(2200, 12, 31)
-                                        .atStartOfDay(java.time.ZoneId.systemDefault())
-                                        .toInstant()
-                                        .toEpochMilli()
-                            }
-                            .show()
-                    },
+                    onClick = { pickingDate = true },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(12.dp),
                 ) {
@@ -374,7 +370,7 @@ fun EditorScreen(
                         .sorted()
                         .forEach { d ->
                             Pill(
-                                if (d == 0) "On the day" else "$d days before",
+                                if (d == 0) "On the day" else "${plural(d, "day")} before",
                                 reminder == d,
                                 { reminder = d },
                             )
@@ -473,5 +469,37 @@ fun EditorScreen(
                 icon = Icons.Rounded.Check,
             )
         }
+    }
+}
+
+/** The editor's field values, compared with the starting values to detect unsaved changes. */
+private data class EditorForm(
+    val name: String,
+    val plan: String,
+    val amount: String,
+    val cycleName: String,
+    val dateText: String,
+    val categoryName: String,
+    val brand: String,
+    val reminder: Int,
+    val trial: Boolean,
+    val notes: String,
+) : java.io.Serializable {
+    companion object {
+        fun from(existing: Subscription?, defaultReminder: Int, today: LocalDate) =
+            EditorForm(
+                name = existing?.name ?: "",
+                plan = existing?.plan ?: "",
+                amount =
+                    existing?.priceMinor?.toBigDecimal()?.movePointLeft(2)?.stripTrailingZeros()?.toPlainString()
+                        ?: "",
+                cycleName = existing?.cycle?.name ?: BillingCycle.MONTHLY.name,
+                dateText = (existing?.anchorDate ?: today.plusDays(1)).toString(),
+                categoryName = existing?.category?.name ?: Category.OTHER.name,
+                brand = existing?.brand ?: "custom",
+                reminder = existing?.reminderDays ?: defaultReminder,
+                trial = existing?.status == SubscriptionStatus.TRIAL,
+                notes = existing?.notes ?: "",
+            )
     }
 }

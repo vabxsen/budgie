@@ -58,6 +58,8 @@ fun AccountSection(
                             SyncStatus.CONNECTING -> Icons.Rounded.CloudSync to "Connecting to your cloud collection…"
                             SyncStatus.SYNCING -> Icons.Rounded.CloudSync to "Saving changes to your account…"
                             SyncStatus.SYNCED -> Icons.Rounded.CloudDone to "Your collection is synced"
+                            SyncStatus.OFFLINE -> Icons.Rounded.CloudOff to
+                                "You’re offline. Changes will sync when you reconnect."
                             SyncStatus.ERROR -> Icons.Rounded.CloudOff to
                                 (syncState.message ?: "Sync paused. Your changes are safe on this device.")
                             SyncStatus.SIGNED_OUT -> Icons.Rounded.CloudSync to "Preparing account sync…"

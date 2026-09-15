@@ -16,6 +16,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.runBlocking
 import org.hamcrest.Matcher
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,6 +24,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BudgieDateTest {
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
+    @Before fun signedOut() = assumeSignedOut()
     private val app get() = ui.activity.application as BudgieApplication
     private fun field(text: String) {
         ui.onNodeWithTag("subscription-editor").performScrollToNode(hasText(text))
@@ -60,7 +62,7 @@ class BudgieDateTest {
         }
         for (days in listOf(0,1,3,7)) {
             field("Remind me")
-            ui.onNodeWithText(if (days == 0) "On the day" else "$days days before")
+            ui.onNodeWithText(if (days == 0) "On the day" else "$days ${if (days == 1) "day" else "days"} before")
                 .performScrollTo().performClick()
         }
         val tomorrow = LocalDate.now().plusDays(1)

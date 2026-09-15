@@ -13,6 +13,7 @@ import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,6 +21,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BudgieStorageTest {
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
+    @Before fun signedOut() = assumeSignedOut()
     private val app get() = ui.activity.application as BudgieApplication
     private fun vm() = ViewModelProvider(ui.activity)[BudgieViewModel::class.java]
     private fun ownData() = BudgieCollection(listOf(Subscription(name = "My membership",
@@ -99,7 +101,7 @@ class BudgieStorageTest {
     @Test fun retryButtonReloadsRecoveredDataWithoutReplacingTheUsersCollection() {
         val original = ownData()
         seed(original)
-        val file = File(app.filesDir, "collection.json")
+        val file = app.repository.activeCollectionFile()
         try {
             file.writeText("unreadable audit fixture")
             runBlocking { app.repository.load() }

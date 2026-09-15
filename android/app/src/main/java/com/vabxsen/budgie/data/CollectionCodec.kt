@@ -110,7 +110,8 @@ object CollectionCodec {
                 else value
             return "\"${safe.replace("\"","\"\"")}\""
         }
-        return "Service,Plan,Amount,Currency,Billing cycle,Billing anchor,Next renewal,Category,Status,Notes\r\n" +
+        // The byte-order mark lets Excel read names in any script as UTF-8.
+        return "${Char(0xFEFF)}Service,Plan,Amount,Currency,Billing cycle,Billing anchor,Next renewal,Category,Status,Notes\r\n" +
             collection.onDate(LocalDate.now()).subscriptions.joinToString("\r\n") { s ->
                 listOf(
                         s.name,
