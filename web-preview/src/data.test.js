@@ -6,6 +6,12 @@ import {
   occurrences,
   initialSubscriptions,
   daysUntil,
+  nextRenewal,
+  dueLabel,
+  plural,
+  csvCell,
+  isValidSubscription,
+  newId,
 } from "./data.js";
 
 test("spending totals count active plans and normalize billing cycles", () => {
@@ -77,4 +83,38 @@ test("calendar totals and the upcoming countdown agree with the sample collectio
     ).length,
     0,
   );
+});
+test("renewals roll forward from the demo date and keep month-end anchors", () => {
+  assert.equal(nextRenewal({ date: "2026-08-15", cycle: "Monthly" }), "2026-09-15");
+  assert.equal(nextRenewal({ date: "2026-10-01", cycle: "Monthly" }), "2026-10-01");
+  assert.equal(
+    nextRenewal({ date: "2026-01-31", cycle: "Monthly" }, new Date(2026, 1, 1)),
+    "2026-02-28",
+  );
+  assert.equal(
+    nextRenewal({ date: "2026-01-31", cycle: "Monthly" }, new Date(2026, 2, 1)),
+    "2026-03-31",
+  );
+  assert.equal(
+    nextRenewal({ date: "2024-02-29", cycle: "Yearly" }, new Date(2026, 0, 1)),
+    "2026-02-28",
+  );
+  assert.equal(nextRenewal({ date: "2026-08-31", cycle: "Weekly" }), "2026-09-14");
+});
+test("exports neutralize spreadsheet formulas and quote text", () => {
+  assert.equal(csvCell("=HYPERLINK(1)"), `"'=HYPERLINK(1)"`);
+  assert.equal(csvCell('Say "hi"'), `"Say ""hi"""`);
+  assert.equal(csvCell(649), `"649"`);
+});
+test("saved data and restored backups share one validation", () => {
+  const sub = initialSubscriptions[0];
+  assert.equal(isValidSubscription(sub), true);
+  assert.equal(isValidSubscription({ ...sub, price: "649" }), false);
+  assert.equal(isValidSubscription({ ...sub, cycle: "Daily" }), false);
+});
+test("ids and labels work without a secure context", () => {
+  assert.match(newId(), /\S+/);
+  assert.equal(plural(1, "day"), "1 day");
+  assert.equal(plural(3, "day"), "3 days");
+  assert.equal(dueLabel(1), "tomorrow");
 });

@@ -56,6 +56,14 @@ class AccountSectionTest {
         ui.onNodeWithText("Offline edits stay on this device and upload when you reconnect.").assertIsDisplayed()
     }
 
+    @Test fun offlineStateExplainsThatChangesSyncLater() {
+        val state = AccountState(profile = AccountProfile("Budgie tester", "tester@example.com"))
+        ui.setContent {
+            BudgieTheme(Appearance.LIGHT) { AccountSection(state, {}, {}, SyncState(SyncStatus.OFFLINE)) }
+        }
+        ui.onNodeWithText("You’re offline. Changes will sync when you reconnect.").assertIsDisplayed()
+    }
+
     @Test fun errorKeepsSignInAvailableForRetry() {
         val message = "Couldn’t connect. Check your internet connection and try again."
         ui.setContent { BudgieTheme(Appearance.LIGHT) { AccountSection(AccountState(message = message), {}, {}) } }

@@ -164,67 +164,84 @@ private class GitHubUpdateClient(private val context: Context) {
     fun download(release: UpdateRelease, onProgress: (Float) -> Unit): File {
         val updateDir = File(context.cacheDir, "updates").apply { mkdirs() }
         updateDir.listFiles()?.forEach { it.delete() }
-        val partial = File(updateDir, "${release.assetName}.part")
-        val destination = File(updateDir, release.assetName)
-        var uri = URI(release.downloadUrl)
-        ReleaseRules.validateInitialDownloadUri(uri, release.tag, release.assetName)
-        var redirects = 0
-        while (true) {
-            val connection = (uri.toURL().openConnection() as HttpURLConnection).apply {
-                instanceFollowRedirects = false
-                connectTimeout = 20_000
-                readTimeout = 30_000
-                requestMethod = "GET"
-                setRequestProperty("Accept", "application/octet-stream")
-                setRequestProperty("User-Agent", "Budgie-Android/${BuildConfig.VERSION_NAME}")
+        val file =
+            downloadRelease(release, updateDir, { it.toURL().openConnection() as HttpURLConnection }, onProgress)
+        try {
+            verifyDownloadedApk(context, file, release)
+        } catch (error: Throwable) {
+            file.delete()
+            throw error
+        }
+        return file
+    }
+}
+
+/** Downloads the release asset, following GitHub's redirect, and checks its size and SHA-256 digest. */
+internal fun downloadRelease(
+    release: UpdateRelease,
+    directory: File,
+    open: (URI) -> HttpURLConnection,
+    onProgress: (Float) -> Unit,
+): File {
+    val partial = File(directory, "${release.assetName}.part")
+    val destination = File(directory, release.assetName)
+    var uri = URI(release.downloadUrl)
+    ReleaseRules.validateInitialDownloadUri(uri, release.tag, release.assetName)
+    var redirects = 0
+    while (true) {
+        val connection = open(uri).apply {
+            instanceFollowRedirects = false
+            connectTimeout = 20_000
+            readTimeout = 30_000
+            requestMethod = "GET"
+            setRequestProperty("Accept", "application/octet-stream")
+            setRequestProperty("User-Agent", "Budgie-Android/${BuildConfig.VERSION_NAME}")
+        }
+        try {
+            if (connection.responseCode in 300..399) {
+                check(redirects++ < MAX_REDIRECTS) { "Too many download redirects." }
+                val location = connection.getHeaderField("Location")
+                    ?: error("GitHub returned an invalid redirect.")
+                uri = uri.resolve(location)
+                ReleaseRules.validateRedirectUri(uri)
+                continue
             }
-            try {
-                if (connection.responseCode in 300..399) {
-                    check(redirects++ < MAX_REDIRECTS) { "Too many download redirects." }
-                    val location = connection.getHeaderField("Location")
-                        ?: error("GitHub returned an invalid redirect.")
-                    uri = uri.resolve(location)
-                    ReleaseRules.validateRedirectUri(uri)
-                    continue
-                }
-                check(connection.responseCode == HttpURLConnection.HTTP_OK) {
-                    "GitHub returned HTTP ${connection.responseCode} while downloading."
-                }
-                val reportedLength = connection.contentLengthLong
-                check(reportedLength == -1L || reportedLength == release.sizeBytes) {
-                    "The downloaded file size does not match the release."
-                }
-                val digest = MessageDigest.getInstance("SHA-256")
-                var total = 0L
-                connection.inputStream.use { input ->
-                    partial.outputStream().buffered().use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read == -1) break
-                            total += read
-                            check(total <= release.sizeBytes && total <= MAX_APK_BYTES) {
-                                "The downloaded file is larger than expected."
-                            }
-                            digest.update(buffer, 0, read)
-                            output.write(buffer, 0, read)
-                            onProgress((total.toFloat() / release.sizeBytes).coerceIn(0f, 1f))
+            check(connection.responseCode == HttpURLConnection.HTTP_OK) {
+                "GitHub returned HTTP ${connection.responseCode} while downloading."
+            }
+            val reportedLength = connection.contentLengthLong
+            check(reportedLength == -1L || reportedLength == release.sizeBytes) {
+                "The downloaded file size does not match the release."
+            }
+            val digest = MessageDigest.getInstance("SHA-256")
+            var total = 0L
+            connection.inputStream.use { input ->
+                partial.outputStream().buffered().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        total += read
+                        check(total <= release.sizeBytes && total <= MAX_APK_BYTES) {
+                            "The downloaded file is larger than expected."
                         }
+                        digest.update(buffer, 0, read)
+                        output.write(buffer, 0, read)
+                        onProgress((total.toFloat() / release.sizeBytes).coerceIn(0f, 1f))
                     }
                 }
-                check(total == release.sizeBytes) { "The update download was incomplete." }
-                val actualDigest = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-                check(actualDigest == release.sha256) { "The update failed its integrity check." }
-                check(partial.renameTo(destination)) { "The downloaded update could not be saved." }
-                verifyDownloadedApk(context, destination, release)
-                return destination
-            } catch (error: Throwable) {
-                partial.delete()
-                destination.delete()
-                throw error
-            } finally {
-                connection.disconnect()
             }
+            check(total == release.sizeBytes) { "The update download was incomplete." }
+            val actualDigest = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            check(actualDigest == release.sha256) { "The update failed its integrity check." }
+            check(partial.renameTo(destination)) { "The downloaded update could not be saved." }
+            return destination
+        } catch (error: Throwable) {
+            partial.delete()
+            destination.delete()
+            throw error
+        } finally {
+            connection.disconnect()
         }
     }
 }

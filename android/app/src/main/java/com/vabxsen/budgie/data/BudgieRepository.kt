@@ -1,18 +1,19 @@
 package com.vabxsen.budgie.data
 
 import android.content.Context
-import android.util.AtomicFile
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
+import android.content.SharedPreferences
+import androidx.annotation.VisibleForTesting
+import androidx.core.content.edit
 import com.vabxsen.budgie.domain.BudgieCollection
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -20,56 +21,80 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** Offline-first storage with a separate local cache and private Firestore path per account. */
-class BudgieRepository(
-    context: Context,
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+/** Remembers that the signed-out collection was copied into an account on this device. */
+internal interface GuestClaim {
+    val claimed: Boolean
+
+    fun markClaimed()
+}
+
+/** Offline-first storage with a separate local cache and private cloud path per account. */
+class BudgieRepository
+internal constructor(
+    private val filesDir: File,
+    private val guestClaim: GuestClaim,
+    private val cloud: CloudBackend,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
-    private val appContext = context.applicationContext
-    private val filesDir = context.filesDir
-    private val guestFile = AtomicFile(File(filesDir, "collection.json"))
-    private val guestMetadataFile = AtomicFile(File(filesDir, "collection-sync.json"))
-    private var activeFile = guestFile
+    constructor(
+        context: Context
+    ) : this(
+        context.filesDir,
+        PreferencesGuestClaim(
+            context.applicationContext.getSharedPreferences("budgie_account_storage", Context.MODE_PRIVATE)
+        ),
+        FirebaseBackend(),
+    )
+
+    private val guestFile = AtomicStorageFile(File(filesDir, "collection.json"))
+    private val guestMetadataFile = AtomicStorageFile(File(filesDir, "collection-sync.json"))
+    @Volatile private var activeFile = guestFile
     private var activeMetadataFile = guestMetadataFile
-    private var activeUid: String? = null
+    @Volatile private var activeUid: String? = null
     private var metadata = SyncMetadata()
     private var loaded = false
 
     private val mutex = Mutex()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private val mutable = MutableStateFlow<Result<BudgieCollection>?>(null)
     val state = mutable.asStateFlow()
     private val mutableSync = MutableStateFlow(SyncState())
     val syncState = mutableSync.asStateFlow()
 
-    private var subscriptionsRegistration: ListenerRegistration? = null
-    private var preferencesRegistration: ListenerRegistration? = null
+    @Volatile private var subscriptionsRegistration: SyncRegistration? = null
+    @Volatile private var preferencesRegistration: SyncRegistration? = null
+    @Volatile private var connectTimeoutJob: Job? = null
+    @Volatile private var retryJob: Job? = null
     private val pendingWrites = AtomicInteger(0)
     private val syncGeneration = AtomicInteger(0)
-    private val profilePreferences =
-        appContext.getSharedPreferences("budgie_account_storage", Context.MODE_PRIVATE)
+    private val retryAttempts = AtomicInteger(0)
+    @Volatile private var serverSynced = false
+    @Volatile private var offline = false
+    @Volatile private var failed = false
+    @Volatile private var subscriptionsProblem: String? = null
+    @Volatile private var preferencesProblem: String? = null
 
-    private val authListener = FirebaseAuth.AuthStateListener { firebase ->
-        if (loaded && firebase.currentUser?.uid != activeUid) {
-            scope.launch { switchProfile(firebase.currentUser?.uid) }
+    init {
+        cloud.addAccountListener { uid ->
+            if (loaded && uid != activeUid) scope.launch { switchProfile(uid) }
         }
     }
 
-    init {
-        auth.addAuthStateListener(authListener)
-    }
+    /** The file holding the collection that is currently shown. */
+    @VisibleForTesting
+    internal fun activeCollectionFile(): File = activeFile.baseFile
 
     suspend fun load() =
-        withContext(Dispatchers.IO) {
+        withContext(ioDispatcher) {
             stopSync()
-            val uid = auth.currentUser?.uid
+            val uid = cloud.currentUid
             val loadedSuccessfully = mutex.withLock { loadProfileLocked(uid) }
             if (loadedSuccessfully && uid != null) startSync(uid)
         }
 
     suspend fun update(transform: (BudgieCollection) -> BudgieCollection) =
-        withContext(Dispatchers.IO) {
+        withContext(ioDispatcher) {
             var subscriptionWrites: List<Pair<String, Map<String, Any>>> = emptyList()
             var preferencesWrite: Map<String, Any>? = null
             var uid: String? = null
@@ -82,6 +107,8 @@ class BudgieRepository(
                 val after = next.subscriptions.associateBy { it.id }
                 val changed = after.values.filter { before[it.id] != it }
                 val removed = before.keys - after.keys
+                val preferencesChanged =
+                    current.preferences.syncedFields() != next.preferences.syncedFields()
 
                 changed.forEach {
                     metadata.subscriptionTimes[it.id] = now
@@ -91,7 +118,7 @@ class BudgieRepository(
                     metadata.deletedTimes[it] = now
                     metadata.subscriptionTimes.remove(it)
                 }
-                if (current.preferences != next.preferences) metadata.preferencesTime = now
+                if (preferencesChanged) metadata.preferencesTime = now
 
                 writeCollection(activeFile, next)
                 writeMetadata(activeMetadataFile, metadata)
@@ -102,16 +129,18 @@ class BudgieRepository(
                     subscriptionWrites =
                         changed.map { it.id to it.toFirestore(metadata.subscriptionTimes.getValue(it.id)) } +
                             removed.map { it to deletedSubscription(metadata.deletedTimes.getValue(it)) }
-                    if (current.preferences != next.preferences) {
+                    if (preferencesChanged) {
                         preferencesWrite = next.preferences.toFirestore(metadata.preferencesTime)
                     }
                 }
             }
             uid?.let { accountId ->
                 subscriptionWrites.forEach { (id, value) ->
-                    write(subscriptionRef(accountId, id), value, accountId)
+                    write(accountId) { done -> cloud.writeSubscription(accountId, id, value, done) }
                 }
-                preferencesWrite?.let { write(preferencesRef(accountId), it, accountId) }
+                preferencesWrite?.let { value ->
+                    write(accountId) { done -> cloud.writePreferences(accountId, value, done) }
+                }
             }
         }
 
@@ -128,21 +157,26 @@ class BudgieRepository(
                 activeMetadataFile = metadataFile
                 activeUid = uid
 
+                val claimGuest = uid != null && !collectionFile.exists() && !guestClaim.claimed
                 val collection =
-                    if (uid != null && !exists(collectionFile) && !profilePreferences.getBoolean("guest_claimed", false)) {
+                    if (claimGuest) {
                         val guest = readCollection(guestFile)
                         writeCollection(collectionFile, guest)
-                        profilePreferences.edit().putBoolean("guest_claimed", true).apply()
+                        guestClaim.markClaimed()
                         guest
                     } else {
                         readCollection(collectionFile)
                     }
 
                 metadata =
-                    if (exists(metadataFile))
-                        runCatching { readMetadata(metadataFile) }
-                            .getOrElse { initialMetadata(collection, collectionFile.baseFile.lastModified()) }
-                    else initialMetadata(collection, collectionFile.baseFile.lastModified())
+                    when {
+                        // Claimed signed-out data has no sync times, so it can't outrank the cloud copy.
+                        claimGuest -> SyncMetadata(pendingClaim = true)
+                        metadataFile.exists() ->
+                            runCatching { readMetadata(metadataFile) }
+                                .getOrElse { initialMetadata(collection, collectionFile.baseFile.lastModified()) }
+                        else -> initialMetadata(collection, collectionFile.baseFile.lastModified())
+                    }
                 writeMetadata(metadataFile, metadata)
                 mutable.value = Result.success(collection)
                 mutableSync.value =
@@ -158,15 +192,15 @@ class BudgieRepository(
             }
             .isSuccess
 
-    private fun profileFiles(uid: String?): Pair<AtomicFile, AtomicFile> {
+    private fun profileFiles(uid: String?): Pair<AtomicStorageFile, AtomicStorageFile> {
         if (uid == null) return guestFile to guestMetadataFile
         val directory = File(filesDir, "accounts").apply { mkdirs() }
         val key =
             MessageDigest.getInstance("SHA-256")
                 .digest(uid.toByteArray())
                 .joinToString("") { "%02x".format(it) }
-        return AtomicFile(File(directory, "$key.json")) to
-            AtomicFile(File(directory, "$key-sync.json"))
+        return AtomicStorageFile(File(directory, "$key.json")) to
+            AtomicStorageFile(File(directory, "$key-sync.json"))
     }
 
     private fun initialMetadata(collection: BudgieCollection, fileTime: Long): SyncMetadata {
@@ -178,178 +212,199 @@ class BudgieRepository(
     }
 
     private fun startSync(uid: String) {
-        if (uid != activeUid || auth.currentUser?.uid != uid) return
+        if (uid != activeUid || cloud.currentUid != uid) return
+        val generation = syncGeneration.get()
         mutableSync.value = SyncState(SyncStatus.CONNECTING)
         subscriptionsRegistration =
-            subscriptionsRef(uid).addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    syncError(uid, error)
-                } else if (snapshot != null) {
-                    scope.launch {
-                        mergeSubscriptions(uid, snapshot.documents.associate { it.id to it.data.orEmpty() })
-                    }
-                }
-            }
+            cloud.listenSubscriptions(
+                uid,
+                { documents, fromCache -> scope.launch { mergeSubscriptions(uid, generation, documents, fromCache) } },
+                { syncFailed(uid, generation) },
+            )
         preferencesRegistration =
-            preferencesRef(uid).addSnapshotListener { snapshot, error ->
-                if (error != null) syncError(uid, error)
-                else scope.launch { mergePreferences(uid, snapshot?.data) }
+            cloud.listenPreferences(
+                uid,
+                { data, fromCache -> scope.launch { mergePreferences(uid, generation, data, fromCache) } },
+                { syncFailed(uid, generation) },
+            )
+        connectTimeoutJob =
+            scope.launch {
+                delay(CONNECT_TIMEOUT_MILLIS)
+                if (isCurrent(uid, generation) && !serverSynced) {
+                    offline = true
+                    publishStatus(uid)
+                }
             }
     }
 
-    private suspend fun mergeSubscriptions(uid: String, documents: Map<String, Map<String, Any>>) {
-        if (uid != activeUid || auth.currentUser?.uid != uid) return
-        if (documents.size > 5000) {
-            mutableSync.value =
-                SyncState(SyncStatus.ERROR, message = "This cloud collection is too large to open safely.")
+    private suspend fun mergeSubscriptions(
+        uid: String,
+        generation: Int,
+        documents: Map<String, Map<String, Any>>,
+        fromCache: Boolean,
+    ) {
+        if (!isCurrent(uid, generation)) return
+        // Deletion records are tiny, so only live subscriptions count toward the safety limit.
+        if (documents.values.count { it["deleted"] != true } > MAX_CLOUD_SUBSCRIPTIONS) {
+            subscriptionsProblem = "This cloud collection is too large to open safely."
+            publishStatus(uid)
             return
         }
-        val parsed = mutableMapOf<String, RemoteSubscription>()
-        try {
-            documents.forEach { (id, data) -> parsed[id] = remoteSubscription(id, data) }
-        } catch (_: Exception) {
-            mutableSync.value =
-                SyncState(SyncStatus.ERROR, message = "Some cloud subscription data is invalid.")
-            return
-        }
+        val remote =
+            try {
+                documents.mapValues { (id, data) -> remoteSubscription(id, data) }
+            } catch (_: Exception) {
+                subscriptionsProblem = "Some cloud subscription data is invalid."
+                publishStatus(uid)
+                return
+            }
+        subscriptionsProblem = null
 
-        val uploads = mutableListOf<Pair<String, Map<String, Any>>>()
+        var uploads: List<SyncUpload> = emptyList()
         mutex.withLock {
-            if (uid != activeUid) return
+            if (!isCurrent(uid, generation)) return
             val current = mutable.value?.getOrNull() ?: return
-            val local = current.subscriptions.associateBy { it.id }.toMutableMap()
-
-            parsed.forEach { (id, remote) ->
-                val localTime =
-                    maxOf(metadata.subscriptionTimes[id] ?: 0, metadata.deletedTimes[id] ?: 0)
-                if (remote.updatedAtMillis > localTime) {
-                    if (remote.subscription == null) {
-                        local.remove(id)
-                        metadata.subscriptionTimes.remove(id)
-                        metadata.deletedTimes[id] = remote.updatedAtMillis
-                    } else {
-                        local[id] = remote.subscription
-                        metadata.deletedTimes.remove(id)
-                        metadata.subscriptionTimes[id] = remote.updatedAtMillis
-                    }
-                } else if (localTime > remote.updatedAtMillis) {
-                    val value =
-                        local[id]?.toFirestore(localTime) ?: deletedSubscription(localTime)
-                    uploads += id to value
-                }
-            }
-
-            local.values.forEach { subscription ->
-                if (subscription.id !in parsed) {
-                    val time =
-                        metadata.subscriptionTimes[subscription.id]
-                            ?: nextTimestampLocked().also {
-                                metadata.subscriptionTimes[subscription.id] = it
-                            }
-                    uploads += subscription.id to subscription.toFirestore(time)
-                }
-            }
-            metadata.deletedTimes.forEach { (id, time) ->
-                if (id !in parsed) uploads += id to deletedSubscription(time)
-            }
-
-            val next = current.copy(subscriptions = local.values.toList())
+            val before = metadata.snapshot()
+            val merge =
+                SyncMerge.subscriptions(
+                    current.subscriptions, remote, metadata, fromCache, ::nextTimestampLocked
+                ) ?: return
+            val next = current.copy(subscriptions = merge.subscriptions)
             if (next != current) {
                 writeCollection(activeFile, next)
                 mutable.value = Result.success(next)
             }
-            writeMetadata(activeMetadataFile, metadata)
+            if (metadata != before) writeMetadata(activeMetadataFile, metadata)
+            uploads = merge.uploads
         }
-        if (uploads.isEmpty()) markSynced(uid)
-        else
-            uploads.distinctBy { it.first }.forEach { (id, data) ->
-                write(subscriptionRef(uid, id), data, uid)
-            }
+        if (fromCache) {
+            if (serverSynced) offline = true
+        } else {
+            serverSynced = true
+            offline = false
+            retryAttempts.set(0)
+        }
+        uploads.forEach { upload ->
+            val data =
+                upload.subscription?.toFirestore(upload.updatedAtMillis)
+                    ?: deletedSubscription(upload.updatedAtMillis)
+            write(uid) { done -> cloud.writeSubscription(uid, upload.id, data, done) }
+        }
+        publishStatus(uid)
     }
 
-    private suspend fun mergePreferences(uid: String, data: Map<String, Any>?) {
-        if (uid != activeUid || auth.currentUser?.uid != uid) return
+    private suspend fun mergePreferences(
+        uid: String,
+        generation: Int,
+        data: Map<String, Any>?,
+        fromCache: Boolean,
+    ) {
+        if (!isCurrent(uid, generation)) return
+        val remote =
+            try {
+                data?.let(::remotePreferences)
+            } catch (_: Exception) {
+                preferencesProblem = "Cloud settings data is invalid."
+                publishStatus(uid)
+                return
+            }
+        preferencesProblem = null
+
         var upload: Map<String, Any>? = null
         mutex.withLock {
-            if (uid != activeUid) return
+            if (!isCurrent(uid, generation)) return
             val current = mutable.value?.getOrNull() ?: return
-            if (data == null) {
-                if (metadata.preferencesTime == 0L) metadata.preferencesTime = nextTimestampLocked()
-                upload = current.preferences.toFirestore(metadata.preferencesTime)
-            } else {
-                val remotePair =
-                    try {
-                        remotePreferences(data)
-                    } catch (_: Exception) {
-                        mutableSync.value =
-                            SyncState(SyncStatus.ERROR, message = "Cloud settings data is invalid.")
-                        return
-                    }
-                val (remote, remoteTime) = remotePair
-                if (remoteTime > metadata.preferencesTime) {
-                    metadata.preferencesTime = remoteTime
-                    val next = current.copy(preferences = remote)
-                    writeCollection(activeFile, next)
-                    mutable.value = Result.success(next)
-                } else if (metadata.preferencesTime > remoteTime) {
-                    upload = current.preferences.toFirestore(metadata.preferencesTime)
-                }
+            val before = metadata.snapshot()
+            val merge =
+                SyncMerge.preferences(current.preferences, remote, metadata, fromCache, ::nextTimestampLocked)
+            merge.preferences?.takeIf { it != current.preferences }?.let {
+                val next = current.copy(preferences = it)
+                writeCollection(activeFile, next)
+                mutable.value = Result.success(next)
             }
-            writeMetadata(activeMetadataFile, metadata)
+            if (metadata != before) writeMetadata(activeMetadataFile, metadata)
+            upload = merge.uploadAtMillis?.let { current.preferences.toFirestore(it) }
         }
-        upload?.let { write(preferencesRef(uid), it, uid) } ?: markSynced(uid)
+        upload?.let { value -> write(uid) { done -> cloud.writePreferences(uid, value, done) } }
+        publishStatus(uid)
     }
 
-    private fun write(reference: DocumentReference, data: Map<String, Any>, uid: String) {
-        if (uid != activeUid || auth.currentUser?.uid != uid) return
+    private fun write(uid: String, send: (onComplete: (success: Boolean) -> Unit) -> Unit) {
+        if (uid != activeUid || cloud.currentUid != uid) return
         val generation = syncGeneration.get()
         pendingWrites.incrementAndGet()
-        mutableSync.value = mutableSync.value.copy(status = SyncStatus.SYNCING, message = null)
-        reference.set(data).addOnCompleteListener { task ->
-            if (generation != syncGeneration.get()) return@addOnCompleteListener
-            val remaining = pendingWrites.updateAndGet { (it - 1).coerceAtLeast(0) }
-            if (uid != activeUid || auth.currentUser?.uid != uid) return@addOnCompleteListener
-            if (task.isSuccessful && remaining == 0) markSynced(uid)
-            else if (!task.isSuccessful) syncError(uid, task.exception)
+        publishStatus(uid)
+        send { success ->
+            if (generation != syncGeneration.get()) return@send
+            pendingWrites.updateAndGet { (it - 1).coerceAtLeast(0) }
+            if (success) publishStatus(uid) else syncFailed(uid, generation)
         }
     }
 
-    private fun markSynced(uid: String) {
-        if (uid == activeUid && auth.currentUser?.uid == uid && pendingWrites.get() == 0) {
-            mutableSync.value = SyncState(SyncStatus.SYNCED, System.currentTimeMillis())
-        }
+    private fun publishStatus(uid: String) {
+        if (uid != activeUid || cloud.currentUid != uid) return
+        val current = mutableSync.value
+        val problem = subscriptionsProblem ?: preferencesProblem
+        mutableSync.value =
+            when {
+                failed ->
+                    SyncState(
+                        SyncStatus.ERROR,
+                        current.lastSyncedAtMillis,
+                        "Sync paused. Budgie will try again shortly, and your changes are safe on this device.",
+                    )
+                problem != null -> SyncState(SyncStatus.ERROR, current.lastSyncedAtMillis, problem)
+                offline -> SyncState(SyncStatus.OFFLINE, current.lastSyncedAtMillis)
+                !serverSynced -> SyncState(SyncStatus.CONNECTING, current.lastSyncedAtMillis)
+                pendingWrites.get() > 0 -> SyncState(SyncStatus.SYNCING, current.lastSyncedAtMillis)
+                current.status == SyncStatus.SYNCED -> current
+                else -> SyncState(SyncStatus.SYNCED, clock())
+            }
     }
 
-    private fun syncError(uid: String, error: Throwable?) {
-        if (uid == activeUid) {
-            val offline = error?.message?.contains("network", ignoreCase = true) == true
-            mutableSync.value =
-                SyncState(
-                    SyncStatus.ERROR,
-                    mutableSync.value.lastSyncedAtMillis,
-                    if (offline) "Offline changes will sync when your connection returns."
-                    else "Sync paused. Your changes are safe on this device.",
-                )
-        }
+    /** The cloud stops a listener after an error, so sync restarts itself after a growing delay. */
+    private fun syncFailed(uid: String, generation: Int) {
+        if (!isCurrent(uid, generation)) return
+        failed = true
+        publishStatus(uid)
+        if (retryJob?.isActive == true) return
+        val attempt = retryAttempts.getAndIncrement().coerceAtMost(MAX_RETRY_SHIFT)
+        retryJob =
+            scope.launch {
+                delay(RETRY_BASE_MILLIS shl attempt)
+                if (isCurrent(uid, generation)) {
+                    detachListeners()
+                    startSync(uid)
+                }
+            }
     }
 
     private fun stopSync() {
+        retryJob?.cancel()
+        retryJob = null
+        retryAttempts.set(0)
+        detachListeners()
+    }
+
+    private fun detachListeners() {
         syncGeneration.incrementAndGet()
         subscriptionsRegistration?.remove()
         preferencesRegistration?.remove()
         subscriptionsRegistration = null
         preferencesRegistration = null
+        connectTimeoutJob?.cancel()
+        connectTimeoutJob = null
         pendingWrites.set(0)
+        serverSynced = false
+        offline = false
+        failed = false
+        subscriptionsProblem = null
+        preferencesProblem = null
         mutableSync.value = SyncState()
     }
 
-    private fun subscriptionsRef(uid: String) =
-        firestore.collection("users").document(uid).collection("subscriptions")
-
-    private fun subscriptionRef(uid: String, id: String) = subscriptionsRef(uid).document(id)
-
-    private fun preferencesRef(uid: String) =
-        firestore.collection("users").document(uid).collection("settings").document("preferences")
+    private fun isCurrent(uid: String, generation: Int) =
+        generation == syncGeneration.get() && uid == activeUid && cloud.currentUid == uid
 
     private fun nextTimestampLocked(): Long {
         val latest =
@@ -358,36 +413,34 @@ class BudgieRepository(
                 metadata.subscriptionTimes.values.maxOrNull() ?: 0,
                 metadata.deletedTimes.values.maxOrNull() ?: 0,
             )
-        return maxOf(System.currentTimeMillis(), latest + 1)
+        return maxOf(clock(), latest + 1)
     }
 
-    private fun readCollection(file: AtomicFile): BudgieCollection =
-        if (exists(file))
-            CollectionCodec.decode(file.openRead().bufferedReader().use { it.readText() })
-        else BudgieCollection()
+    private fun SyncMetadata.snapshot() =
+        copy(subscriptionTimes = subscriptionTimes.toMutableMap(), deletedTimes = deletedTimes.toMutableMap())
 
-    private fun readMetadata(file: AtomicFile): SyncMetadata =
-        SyncMetadataCodec.decode(file.openRead().bufferedReader().use { it.readText() })
+    private fun readCollection(file: AtomicStorageFile): BudgieCollection =
+        if (file.exists()) CollectionCodec.decode(file.readText()) else BudgieCollection()
 
-    private fun writeCollection(file: AtomicFile, collection: BudgieCollection) =
-        writeAtomic(file, CollectionCodec.encode(collection).toByteArray(Charsets.UTF_8))
+    private fun readMetadata(file: AtomicStorageFile): SyncMetadata = SyncMetadataCodec.decode(file.readText())
 
-    private fun writeMetadata(file: AtomicFile, value: SyncMetadata) =
-        writeAtomic(file, SyncMetadataCodec.encode(value).toByteArray(Charsets.UTF_8))
+    private fun writeCollection(file: AtomicStorageFile, collection: BudgieCollection) =
+        file.write(CollectionCodec.encode(collection).toByteArray(Charsets.UTF_8))
 
-    private fun writeAtomic(file: AtomicFile, bytes: ByteArray) {
-        file.baseFile.parentFile?.mkdirs()
-        var stream: java.io.FileOutputStream? = null
-        try {
-            stream = file.startWrite()
-            stream.write(bytes)
-            file.finishWrite(stream)
-        } catch (e: Exception) {
-            file.failWrite(stream)
-            throw e
-        }
+    private fun writeMetadata(file: AtomicStorageFile, value: SyncMetadata) =
+        file.write(SyncMetadataCodec.encode(value).toByteArray(Charsets.UTF_8))
+
+    private companion object {
+        const val MAX_CLOUD_SUBSCRIPTIONS = 5000
+        const val CONNECT_TIMEOUT_MILLIS = 10_000L
+        const val RETRY_BASE_MILLIS = 15_000L
+        const val MAX_RETRY_SHIFT = 4
     }
+}
 
-    private fun exists(file: AtomicFile) =
-        file.baseFile.exists() || File(file.baseFile.path + ".bak").exists()
+private class PreferencesGuestClaim(private val preferences: SharedPreferences) : GuestClaim {
+    override val claimed: Boolean
+        get() = preferences.getBoolean("guest_claimed", false)
+
+    override fun markClaimed() = preferences.edit { putBoolean("guest_claimed", true) }
 }

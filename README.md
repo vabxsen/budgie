@@ -8,12 +8,12 @@ Budgie brings recurring payments, renewal dates, and spending into one place. Th
 
 | Project | Stack | Status |
 | --- | --- | --- |
-| [Android](android/) | Kotlin, Jetpack Compose, WorkManager | Offline collection with optional Google sign-in |
+| [Android](android/) | Kotlin, Jetpack Compose, WorkManager, Firebase | Offline-first collection with optional Google sign-in and sync |
 | [Website preview](web-preview/) | React, Vite | Interactive responsive prototype |
 
 ### Android
 
-The native app includes subscription creation and editing, weekly/monthly/yearly billing, a renewal calendar, category insights, budgets, free trials, archiving, search, light/dark themes, renewal notifications, and CSV/JSON export and restore. It starts with an empty collection and no preset budget. Spending is calculated from subscriptions entered by the user.
+The native app includes subscription creation and editing, weekly/monthly/yearly billing, a renewal calendar, category insights, budgets, free trials, archiving, search, light/dark themes, renewal notifications, CSV/JSON export and restore, Google sign-in with sync between Android devices, and signed in-app updates from GitHub Releases. It starts with an empty collection and no preset budget. Spending is calculated from subscriptions entered by the user.
 
 Open `android/` in Android Studio with JDK 17 or 21 and Android SDK 36. Android 8.0 or newer is supported.
 
@@ -36,9 +36,13 @@ Open `http://127.0.0.1:5173`. Run `npm test` and `npm run build` to validate the
 
 ## Current scope
 
-The Android app stores data privately on the device; the website prototype uses browser storage. Accounts and cross-device sync are not implemented. Amounts use INR, and spending is estimated from manually entered subscriptions. Budgie does not connect to banks, verify transactions, or cancel subscriptions with providers. Android may delay reminders because of battery restrictions.
+The Android app keeps its collection in private app storage. Signing in with Google also saves subscriptions and settings to a private Firebase account so they sync between Android devices; reminder permission stays on each device. The website prototype uses browser storage and is not connected to accounts. Amounts use INR, and spending is estimated from manually entered subscriptions. Budgie does not connect to banks, verify transactions, or cancel subscriptions with providers. Android may delay reminders because of battery restrictions, and reminders posted between 10 PM and 7 AM are silent.
 
 The website starts with fictional demo data and a fixed demo date. Its reminder controls save preferences rather than deliver notifications. Web and Android backups currently use separate formats.
+
+## Continuous integration
+
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the Android unit tests, lint, and a debug build, plus the website tests and build, on every push to `main` and every pull request. Add a repository secret named `GOOGLE_SERVICES_JSON` containing `android/app/google-services.json`; the Android build intentionally fails without it.
 
 ## License
 

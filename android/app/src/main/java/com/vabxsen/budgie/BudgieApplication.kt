@@ -7,6 +7,8 @@ import com.vabxsen.budgie.updates.cleanupInstalledUpdateFiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
@@ -19,8 +21,13 @@ class BudgieApplication : Application() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             cleanupInstalledUpdateFiles(this@BudgieApplication)
             repository.load()
-            repository.state.filterNotNull().collect { result ->
-                if (result.isSuccess) ReminderScheduler.schedule(this@BudgieApplication)
+            // Edits, cloud updates and account switches all refresh reminders; bursts are coalesced.
+            repository.state.filterNotNull().collectLatest { result ->
+                if (result.isSuccess) {
+                    delay(500)
+                    ReminderScheduler.schedule(this@BudgieApplication)
+                    ReminderScheduler.checkNow(this@BudgieApplication)
+                }
             }
         }
     }

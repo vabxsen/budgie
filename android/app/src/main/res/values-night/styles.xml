@@ -1,0 +1,11 @@
+<resources>
+    <!-- A dark window while the app starts in dark mode, so the first frame doesn't flash white. -->
+    <style name="Theme.Budgie" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/budgie_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/budgie_background</item>
+        <item name="android:navigationBarColor">@color/budgie_background</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

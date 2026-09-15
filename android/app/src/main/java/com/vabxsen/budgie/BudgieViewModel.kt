@@ -6,7 +6,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.vabxsen.budgie.data.CollectionCodec
 import com.vabxsen.budgie.domain.*
-import com.vabxsen.budgie.notifications.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,10 +34,7 @@ class BudgieViewModel(app: Application) : AndroidViewModel(app) {
     private fun change(success: String, transform: (BudgieCollection) -> BudgieCollection) {
         viewModelScope.launch {
             runCatching { repository.update(transform) }
-                .onSuccess {
-                    if (success.isNotBlank()) message(success)
-                    ReminderScheduler.checkNow(getApplication())
-                }
+                .onSuccess { if (success.isNotBlank()) message(success) }
                 .onFailure { message("Couldn’t save your changes. Please try again.") }
         }
     }
@@ -70,7 +66,6 @@ class BudgieViewModel(app: Application) : AndroidViewModel(app) {
                     .onSuccess {
                         onSaved()
                         message("${subscription.name} saved. All in a good place.")
-                        ReminderScheduler.checkNow(getApplication())
                     }
                     .onFailure { message("Couldn’t save your changes. Please try again.") }
             } finally {

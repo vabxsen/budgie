@@ -4,16 +4,34 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.vabxsen.budgie.R
 import com.vabxsen.budgie.domain.Appearance
 
-val DisplayFont = FontFamily(Font(R.font.bricolage))
-val BodyFont = FontFamily(Font(R.font.dm_sans))
+// Both fonts are variable, so every weight the theme uses is declared with its own axis value.
+val DisplayFont =
+    FontFamily(
+        weightedFont(R.font.bricolage, FontWeight.Normal),
+        weightedFont(R.font.bricolage, FontWeight.Medium),
+        weightedFont(R.font.bricolage, FontWeight.SemiBold),
+    )
+val BodyFont =
+    FontFamily(
+        weightedFont(R.font.dm_sans, FontWeight.Normal),
+        weightedFont(R.font.dm_sans, FontWeight.Medium),
+        weightedFont(R.font.dm_sans, FontWeight.SemiBold),
+        weightedFont(R.font.dm_sans, FontWeight.Bold),
+    )
+
+@OptIn(ExperimentalTextApi::class)
+private fun weightedFont(resId: Int, weight: FontWeight) =
+    Font(resId, weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)))
 val Butter = Color(0xFFF5E889)
 val Pine = Color(0xFF292F27)
 val Coral = Color(0xFFEE785B)
@@ -33,7 +51,7 @@ val LocalBudgieColors = staticCompositionLocalOf {
         Color(0xFFF7F8F3),
         Color.White,
         Color(0xFF242722),
-        Color(0xFF70776A),
+        Color(0xFF646B5E),
         Color(0xFFE5E7DE),
         Color(0xFFEEF0E8),
         false,

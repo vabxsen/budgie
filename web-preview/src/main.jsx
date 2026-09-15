@@ -72,6 +72,12 @@ import {
   monthlyValue,
   occurrences,
   readSaved,
+  nextRenewal,
+  dueLabel,
+  plural,
+  csvCell,
+  isValidSubscription,
+  newId,
 } from "./data";
 
 const icons = {
@@ -101,6 +107,11 @@ const routes = [
   { id: "insights", label: "Insights", icon: ChartBar },
   { id: "reminders", label: "Reminders", icon: Bell },
 ];
+const pages = [...routes.map((r) => r.id), "settings"];
+const pageFromHash = () => {
+  const id = location.hash.slice(1);
+  return pages.includes(id) ? id : "overview";
+};
 function Brand({ brand = "custom", large = false }) {
   const icon = icons[brand];
   const [bg, color] = brandStyles[brand] || brandStyles.custom;
@@ -185,7 +196,7 @@ function App() {
     ...{ budget: 4000, reminder: 3, notifications: true, theme: "light" },
     ...saved?.prefs,
   });
-  const [page, setPage] = useState(location.hash.slice(1) || "overview");
+  const [page, setPage] = useState(pageFromHash);
   const [modal, setModal] = useState(null),
     [toast, setToast] = useState(""),
     [period, setPeriod] = useState("Monthly");
@@ -203,7 +214,7 @@ function App() {
   const notify = (message) => setToast(message);
   useEffect(() => {
     const change = () => {
-      setPage(location.hash.slice(1) || "overview");
+      setPage(pageFromHash());
       setSearch("");
       setSelectedDay(null);
     };
@@ -235,9 +246,12 @@ function App() {
   const active = subs.filter((s) => s.status === "Active"),
     total = monthlyTotal(subs),
     yearTotal = total * 12;
+  const renewalDates = new Map(subs.map((s) => [s.id, nextRenewal(s)]));
+  const nextOf = (s) => renewalDates.get(s.id) ?? nextRenewal(s);
   const upcoming = subs
     .filter((s) => s.status !== "Archived")
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => nextOf(a).localeCompare(nextOf(b)));
+  const dueThisWeek = upcoming.filter((s) => daysUntil(nextOf(s)) < 7);
   const grouped = categories
     .map((name) => ({
       name,
@@ -264,7 +278,7 @@ function App() {
         : `${sub.name} archived. Your provider subscription is unchanged.`,
     );
   };
-  const save = (sub) => {
+  const save = ({ occurrence: _calendarDate, ...sub }) => {
     setSubs((prev) =>
       prev.some((s) => s.id === sub.id)
         ? prev.map((s) => (s.id === sub.id ? sub : s))
@@ -280,13 +294,22 @@ function App() {
     const csv = [
       "Service,Plan,Amount,Cycle,Next payment,Category,Status",
       ...subs.map((s) =>
-        [s.name, s.plan, s.price, s.cycle, s.date, s.category, s.status]
-          .map((v) => '"' + String(v).replaceAll('"', '""') + '"')
+        [
+          s.name,
+          s.plan,
+          s.price,
+          s.cycle,
+          s.status === "Archived" ? "" : nextOf(s),
+          s.category,
+          s.status,
+        ]
+          .map(csvCell)
           .join(","),
       ),
     ].join("\n");
     const url = URL.createObjectURL(
-      new Blob([format === "json" ? json : csv], {
+      // The byte-order mark lets Excel read names in any script as UTF-8.
+      new Blob([format === "json" ? json : String.fromCharCode(0xfeff) + csv], {
         type: format === "json" ? "application/json" : "text/csv",
       }),
     );
@@ -306,18 +329,7 @@ function App() {
     if (!file) return;
     try {
       const data = JSON.parse(await file.text());
-      if (
-        !Array.isArray(data.subs) ||
-        !data.subs.every(
-          (s) =>
-            typeof s.name === "string" &&
-            typeof s.id === "string" &&
-            s.price > 0 &&
-            ["Monthly", "Yearly", "Weekly"].includes(s.cycle) &&
-            ["Active", "Trial", "Archived"].includes(s.status) &&
-            /^\d{4}-\d{2}-\d{2}$/.test(s.date),
-        )
-      )
+      if (!Array.isArray(data.subs) || !data.subs.every(isValidSubscription))
         throw Error();
       setModal({ type: "restore", data });
     } catch {
@@ -365,7 +377,7 @@ function App() {
           : sub.status === "Trial"
             ? "Trial ends"
             : "Renews"}{" "}
-        {dateLabel(sub.date)}
+        {dateLabel(sub.status === "Archived" ? sub.date : nextOf(sub))}
         <span className="service-cycle">{sub.cycle}</span>
       </div>
     </button>
@@ -380,7 +392,7 @@ function App() {
         </small>
       </span>
       <span className="row-date">
-        {dateLabel(sub.date)}
+        {dateLabel(nextOf(sub))}
         <small>{sub.status}</small>
       </span>
       <span className="row-amount">
@@ -486,22 +498,9 @@ function App() {
                   <CalendarBlank size={16} />
                 </span>
                 <strong>
-                  {money(
-                    upcoming
-                      .filter(
-                        (s) => daysUntil(s.date) >= 0 && daysUntil(s.date) <= 7,
-                      )
-                      .reduce((a, s) => a + s.price, 0),
-                  )}
+                  {money(dueThisWeek.reduce((a, s) => a + s.price, 0))}
                 </strong>
-                <small>
-                  {
-                    upcoming.filter(
-                      (s) => daysUntil(s.date) >= 0 && daysUntil(s.date) <= 7,
-                    ).length
-                  }{" "}
-                  upcoming payments
-                </small>
+                <small>{plural(dueThisWeek.length, "upcoming payment")}</small>
               </div>
               <button onClick={() => go("subscriptions")}>
                 <span>
@@ -561,11 +560,11 @@ function App() {
                   </button>
                   <div className="next-price">
                     {money(next.price)}
-                    <span>in {Math.max(0, daysUntil(next.date))} days</span>
+                    <span>{dueLabel(daysUntil(nextOf(next)))}</span>
                   </div>
                   <div className="next-date">
                     <CalendarBlank size={17} />
-                    {dateLabel(next.date, {
+                    {dateLabel(nextOf(next), {
                       weekday: "long",
                       day: "numeric",
                       month: "short",
@@ -580,8 +579,10 @@ function App() {
                 {upcoming.slice(1, 4).map((s) => (
                   <button key={s.id} onClick={() => details(s)}>
                     <span className="timeline-date">
-                      {dateLabel(s.date, { day: "2-digit" })}
-                      <small>SEP</small>
+                      {dateLabel(nextOf(s), { day: "2-digit" })}
+                      <small>
+                        {dateLabel(nextOf(s), { month: "short" }).toUpperCase()}
+                      </small>
                     </span>
                     <Brand brand={s.brand} />
                     <span>
@@ -1146,8 +1147,8 @@ function App() {
           {list.map((s) => (
             <button key={s.id} onClick={() => details(s)}>
               <div className="reminder-day">
-                <strong>{parseDate(s.date).getDate()}</strong>
-                <span>{dateLabel(s.date, { month: "short" })}</span>
+                <strong>{parseDate(nextOf(s)).getDate()}</strong>
+                <span>{dateLabel(nextOf(s), { month: "short" })}</span>
               </div>
               <Brand brand={s.brand} />
               <div className="reminder-info">
@@ -1156,7 +1157,7 @@ function App() {
                   <span className="soft-tag">
                     {s.status === "Trial"
                       ? "TRIAL ENDS"
-                      : `${daysUntil(s.date)} DAYS TO GO`}
+                      : dueLabel(daysUntil(nextOf(s))).toUpperCase()}
                   </span>
                 </h3>
                 <p>
@@ -1826,13 +1827,9 @@ function SubscriptionForm({ sub, reminder, save, cancel }) {
     setForm((f) => ({
       ...f,
       name,
+      // Shortcuts fill in the service only; the price and plan stay the user's own.
       ...(known
-        ? {
-            brand: known.brand,
-            category: known.category,
-            plan: known.plan,
-            price: known.price,
-          }
+        ? { brand: known.brand, category: known.category }
         : { brand: "custom" }),
     }));
   };
@@ -1850,7 +1847,7 @@ function SubscriptionForm({ sub, reminder, save, cancel }) {
     }
     save({
       ...form,
-      id: sub?.id || crypto.randomUUID(),
+      id: sub?.id || newId(),
       name: form.name.trim(),
       price: Number(form.price),
       reminder: Number(form.reminder),
@@ -1993,6 +1990,8 @@ function SubscriptionForm({ sub, reminder, save, cancel }) {
   );
 }
 function Detail({ sub, edit, archive }) {
+  const next = nextRenewal(sub);
+  const due = dueLabel(daysUntil(next));
   return (
     <div className="detail">
       <div className="detail-brand">
@@ -2018,24 +2017,26 @@ function Detail({ sub, edit, archive }) {
               : "week"}
         </span>
       </div>
-      <div className="renewal-ticket">
-        <CalendarBlank size={24} />
-        <div>
-          <small>NEXT RENEWAL</small>
-          <strong>
-            {dateLabel(sub.date, {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </strong>
+      {sub.status === "Archived" ? (
+        <p className="modal-copy">
+          Archived in Budgie. Excluded from spending totals and reminders.
+        </p>
+      ) : (
+        <div className="renewal-ticket">
+          <CalendarBlank size={24} />
+          <div>
+            <small>{sub.status === "Trial" ? "TRIAL ENDS" : "NEXT RENEWAL"}</small>
+            <strong>
+              {dateLabel(next, {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </strong>
+          </div>
+          <span>{due.charAt(0).toUpperCase() + due.slice(1)}</span>
         </div>
-        <span>
-          {daysUntil(sub.date) >= 0
-            ? `In ${daysUntil(sub.date)} days`
-            : "Date has passed"}
-        </span>
-      </div>
+      )}
       <dl>
         <div>
           <dt>Category</dt>
@@ -2051,7 +2052,7 @@ function Detail({ sub, edit, archive }) {
         </div>
         <div>
           <dt>Reminder</dt>
-          <dd>{sub.reminder} days before</dd>
+          <dd>{plural(Number(sub.reminder), "day")} before</dd>
         </div>
         <div>
           <dt>Tracking since</dt>

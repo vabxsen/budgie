@@ -143,14 +143,33 @@ fun money(minor: BigDecimal): String =
         }
         .format(minor.divide(100.toBigDecimal(), 2, RoundingMode.HALF_UP))
 
+// Indian ("1,23,456.78") and international ("123,456.78") grouping; a comma is never a decimal point.
+private val groupedAmount =
+    Regex("""^\d{1,3}(?:,\d{2})*,\d{3}(?:\.\d+)?$|^\d{1,3}(?:,\d{3})+(?:\.\d+)?$""")
+
 fun parseAmount(text: String): Long? =
     try {
-        text.trim().toBigDecimal().multiply(100.toBigDecimal()).longValueExact().takeIf {
+        val trimmed = text.trim().removePrefix("₹").trim()
+        val plain = if (groupedAmount.matches(trimmed)) trimmed.replace(",", "") else trimmed
+        plain.toBigDecimal().multiply(100.toBigDecimal()).longValueExact().takeIf {
             it in 1..1_000_000_000L
         }
     } catch (_: Exception) {
         null
     }
+
+/** Whole-number percentages that always add up to 100 (largest-remainder rounding). */
+fun percentShares(amounts: List<BigDecimal>): List<Int> {
+    val total = amounts.fold(BigDecimal.ZERO, BigDecimal::add)
+    if (total.signum() <= 0) return amounts.map { 0 }
+    val exact = amounts.map { it.multiply(100.toBigDecimal()).divide(total, 8, RoundingMode.HALF_UP) }
+    val shares = exact.map { it.setScale(0, RoundingMode.FLOOR).toInt() }.toMutableList()
+    exact.indices
+        .sortedByDescending { exact[it] - shares[it].toBigDecimal() }
+        .take(100 - shares.sum())
+        .forEach { shares[it]++ }
+    return shares
+}
 
 object ServiceCatalog {
     data class Service(val name: String, val brand: String, val category: Category)

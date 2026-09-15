@@ -148,6 +148,52 @@ export function dateLabel(value, options = { month: "short", day: "numeric" }) {
 export function daysUntil(value) {
   return Math.round((parseDate(value) - TODAY) / 86400000);
 }
+function addMonthsKeepingDay(anchor, months) {
+  const target = new Date(anchor.getFullYear(), anchor.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(anchor.getDate(), lastDay));
+  return target;
+}
+/** The first billing date on or after `from`, keeping month-end and leap-day anchors. */
+export function nextRenewal(sub, from = TODAY) {
+  const anchor = parseDate(sub.date);
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  if (start <= anchor) return sub.date;
+  if (sub.cycle === "Weekly") {
+    const days = Math.round((start - anchor) / 86400000);
+    const next = new Date(anchor);
+    next.setDate(anchor.getDate() + Math.ceil(days / 7) * 7);
+    return dateString(next);
+  }
+  const step = sub.cycle === "Yearly" ? 12 : 1;
+  const months =
+    (start.getFullYear() - anchor.getFullYear()) * 12 +
+    start.getMonth() -
+    anchor.getMonth();
+  let index = Math.floor(months / step);
+  let next = addMonthsKeepingDay(anchor, index * step);
+  while (next < start) next = addMonthsKeepingDay(anchor, ++index * step);
+  return dateString(next);
+}
+export function dueLabel(days) {
+  return days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+}
+export function plural(count, one, many = `${one}s`) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+export function csvCell(value) {
+  const text = String(value ?? "");
+  // A leading =, +, -, @ or control character would run as a spreadsheet formula.
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+export function newId() {
+  // crypto.randomUUID only exists on HTTPS and localhost.
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `sub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  );
+}
 export function monthlyValue(sub) {
   return sub.cycle === "Yearly"
     ? sub.price / 12
@@ -190,23 +236,25 @@ export function occurrences(subs, year, month) {
   }
   return result.sort((a, b) => a.occurrence.localeCompare(b.occurrence));
 }
+/** Shared by saved data and restored backups, so a restore can't vanish on the next reload. */
+export function isValidSubscription(s) {
+  return (
+    s !== null &&
+    typeof s === "object" &&
+    typeof s.id === "string" &&
+    typeof s.name === "string" &&
+    Number.isFinite(s.price) &&
+    s.price > 0 &&
+    typeof s.date === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(s.date) &&
+    ["Monthly", "Yearly", "Weekly"].includes(s.cycle) &&
+    ["Active", "Trial", "Archived"].includes(s.status)
+  );
+}
 export function readSaved() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (
-      raw &&
-      Array.isArray(raw.subs) &&
-      raw.subs.every(
-        (s) =>
-          typeof s.id === "string" &&
-          typeof s.name === "string" &&
-          Number.isFinite(s.price) &&
-          s.price > 0 &&
-          /^\d{4}-\d{2}-\d{2}$/.test(s.date) &&
-          ["Monthly", "Yearly", "Weekly"].includes(s.cycle) &&
-          ["Active", "Trial", "Archived"].includes(s.status),
-      )
-    )
+    if (raw && Array.isArray(raw.subs) && raw.subs.every(isValidSubscription))
       return raw;
   } catch {
     /* Invalid or unavailable storage falls back to sample data. */

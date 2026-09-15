@@ -1,5 +1,6 @@
 package com.vabxsen.budgie.updates
 
+import java.net.URI
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -67,6 +68,16 @@ class ReleaseRulesTest {
         val json = releaseJson(assets = "$asset,$asset")
         assertThrows(IllegalStateException::class.java) {
             ReleaseRules.parseLatestRelease(json)
+        }
+    }
+
+    @Test
+    fun downloadRedirectsStayOnGitHubOverHttps() {
+        ReleaseRules.validateRedirectUri(
+            URI("https://release-assets.githubusercontent.com/github-production-release-asset/1")
+        )
+        listOf("https://example.com/Budgie.apk", "http://github.com/vabxsen/budgie").forEach {
+            assertThrows(IllegalStateException::class.java) { ReleaseRules.validateRedirectUri(URI(it)) }
         }
     }
 
