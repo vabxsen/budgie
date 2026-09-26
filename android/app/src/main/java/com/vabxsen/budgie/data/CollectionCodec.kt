@@ -95,6 +95,9 @@ object CollectionCodec {
             subscriptions.all {
                 it.id.isNotBlank() &&
                     it.id.length <= 100 &&
+                    '/' !in it.id &&
+                    it.id != "." && it.id != ".." &&
+                    !(it.id.startsWith("__") && it.id.endsWith("__")) &&
                     it.anchorDate.year in 1900..2200 &&
                     it.createdDate.year in 1900..2200
             }

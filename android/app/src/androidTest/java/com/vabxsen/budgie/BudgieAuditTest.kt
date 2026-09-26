@@ -40,6 +40,7 @@ class BudgieAuditTest {
     }
     private fun input(label: String, value: String) {
         editor(label)
+        ui.waitUntil(5_000) { ui.onAllNodesWithText(label).fetchSemanticsNodes().size == 1 }
         ui.onNodeWithText(label).performTextReplacement(value)
     }
     private fun sample(name: String, status: SubscriptionStatus = SubscriptionStatus.ACTIVE,
@@ -123,10 +124,16 @@ class BudgieAuditTest {
             sample("Trial plan", SubscriptionStatus.TRIAL), sample("Old plan", SubscriptionStatus.ARCHIVED))
         tab("Subscriptions")
         click("Free trials")
-        ui.onNodeWithText("Trial plan").performScrollTo().assertIsDisplayed()
-        click("Archived")
-        ui.onNodeWithText("Old plan").performScrollTo().assertIsDisplayed()
-        click("All")
+        reveal("Trial plan").assertIsDisplayed()
+        reveal("Archived").performScrollTo()
+        // Keep the filter row inside the list viewport, below the fixed app bar.
+        ui.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
+        ui.onNodeWithText("Archived").assertIsDisplayed().performClick()
+        ui.onNode(hasText("Archived") and isSelected()).assertExists()
+        reveal("Old plan").assertIsDisplayed()
+        reveal("All").performScrollTo()
+        ui.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
+        ui.onNodeWithText("All").assertIsDisplayed().performClick()
         ui.onNodeWithText("Search subscriptions").performScrollTo().performTextInput("no-match")
         ui.onNodeWithText("No matches this time.").performScrollTo().assertIsDisplayed()
         ui.onNodeWithContentDescription("Clear search").performScrollTo().performClick()
@@ -166,9 +173,9 @@ class BudgieAuditTest {
         ui.onNodeWithText("Your bigger picture starts here.").performScrollTo().assertIsDisplayed()
         seed(sample("Only mine"))
         ui.onNodeWithText("Monthly").performScrollTo().performClick()
-        ui.onNodeWithText(money(12345)).assertIsDisplayed()
+        ui.onAllNodesWithText(money(12345))[0].assertIsDisplayed()
         click("Yearly")
-        ui.onNodeWithText(money(148140)).assertIsDisplayed()
+        ui.onAllNodesWithText(money(148140))[0].assertIsDisplayed()
         click("Only mine")
         ui.onNodeWithText("Subscription details").assertIsDisplayed()
         ui.onNodeWithContentDescription("Back").performClick()

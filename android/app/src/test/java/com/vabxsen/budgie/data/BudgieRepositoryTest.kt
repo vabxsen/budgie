@@ -8,6 +8,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -185,5 +186,73 @@ class BudgieRepositoryTest {
 
         advanceUntilIdle()
         assertEquals(SyncStatus.SYNCED, phone.syncState.value.status)
+    }
+
+    @Test
+    fun syncedWaitsForTheServerPreferencesSnapshot() = runTest {
+        val backend = object : CloudBackend {
+            override val currentUid = "user"
+            override fun addAccountListener(onChange: (String?) -> Unit) = onChange(currentUid)
+            override fun listenSubscriptions(uid: String, onChange: (Map<String, Map<String, Any>>, Boolean) -> Unit,
+                onError: (Exception) -> Unit): SyncRegistration {
+                onChange(emptyMap(), false)
+                return SyncRegistration {}
+            }
+            override fun listenPreferences(uid: String, onChange: (Map<String, Any>?, Boolean) -> Unit,
+                onError: (Exception) -> Unit) = SyncRegistration {}
+            override fun writeSubscription(uid: String, id: String, data: Map<String, Any>,
+                onComplete: (Boolean) -> Unit) = onComplete(true)
+            override fun writePreferences(uid: String, data: Map<String, Any>,
+                onComplete: (Boolean) -> Unit) = onComplete(true)
+        }
+        val claim = object : GuestClaim {
+            override val claimed = true
+            override fun markClaimed() {}
+        }
+        val phone = BudgieRepository(folder.newFolder(), claim, backend,
+            StandardTestDispatcher(testScheduler), { time++ })
+        phone.load()
+        runCurrent()
+
+        assertEquals(SyncStatus.CONNECTING, phone.syncState.value.status)
+    }
+
+    @Test
+    fun synchronousCloudWriteFailureKeepsTheLocalEditAndReportsAnError() = runTest {
+        var failuresRemaining = 1
+        val backend = object : CloudBackend {
+            override val currentUid = "user"
+            override fun addAccountListener(onChange: (String?) -> Unit) = onChange(currentUid)
+            override fun listenSubscriptions(uid: String, onChange: (Map<String, Map<String, Any>>, Boolean) -> Unit,
+                onError: (Exception) -> Unit): SyncRegistration {
+                onChange(emptyMap(), false)
+                return SyncRegistration {}
+            }
+            override fun listenPreferences(uid: String, onChange: (Map<String, Any>?, Boolean) -> Unit,
+                onError: (Exception) -> Unit): SyncRegistration {
+                onChange(null, false)
+                return SyncRegistration {}
+            }
+            override fun writeSubscription(uid: String, id: String, data: Map<String, Any>,
+                onComplete: (Boolean) -> Unit) {
+                if (failuresRemaining-- > 0) throw IllegalArgumentException("Invalid path")
+                onComplete(true)
+            }
+            override fun writePreferences(uid: String, data: Map<String, Any>,
+                onComplete: (Boolean) -> Unit) = onComplete(true)
+        }
+        val claim = object : GuestClaim {
+            override val claimed = true
+            override fun markClaimed() {}
+        }
+        val phone = BudgieRepository(folder.newFolder(), claim, backend,
+            StandardTestDispatcher(testScheduler), { time++ })
+        phone.load()
+        runCurrent()
+        phone.update { it.copy(subscriptions = listOf(subscription("local", "Gym", 150000))) }
+        runCurrent()
+
+        assertEquals(setOf("local"), phone.ids())
+        assertEquals(SyncStatus.ERROR, phone.syncState.value.status)
     }
 }

@@ -39,6 +39,16 @@ class CollectionCodecTest {
     }
 
     @Test
+    fun firestoreIncompatibleIdentifiersAreRejectedOnRestore() {
+        for (id in listOf("bad/path", ".", "..", "__reserved__")) {
+            val backup = collection.copy(subscriptions = listOf(collection.subscriptions.single().copy(id = id)))
+            assertThrows("ID $id should be rejected", IllegalArgumentException::class.java) {
+                CollectionCodec.decode(CollectionCodec.encode(backup))
+            }
+        }
+    }
+
+    @Test
     fun exportedTextDoesNotBecomeASpreadsheetFormula() {
         val data =
             collection.copy(

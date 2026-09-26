@@ -30,10 +30,10 @@ npm run build
 
 ## Preview boundaries
 
-All starting subscriptions, prices and dates are fictional sample data. The demo clock is September 12, 2026 so the reference dates remain coherent. Spending projections are estimates based on current active rates. The browser preview does not schedule Android notifications, connect bank accounts, charge money or cancel provider subscriptions. The sign-in controls show the planned account experience without creating an account or sending credentials. Reminder controls save preferences only. JSON restoration replaces subscriptions; preferences are retained.
+All starting subscriptions, prices and dates are fictional sample data. The demo clock is September 12, 2026 so the reference dates remain coherent. Spending projections are estimates based on current active rates. The browser preview does not schedule Android notifications, connect bank accounts, charge money or cancel provider subscriptions. The sign-in controls show the planned account experience without creating an account or sending credentials. Reminder controls save preferences only. JSON restoration replaces subscriptions and restores preferences when the backup includes them. Older subscriptions-only backups leave current preferences in place.
 
 Fonts are bundled locally using Fontsource. UI icons use Phosphor; available service marks use Simple Icons. Prime Video uses a generic playback icon. No remote tracking scripts or API credentials are included.
 
 ## Implementation notes
 
-`src/main.jsx` contains the UI prototype. `src/data.js` provides sample data, money formatting and recurrence calculations; `src/data.test.js` checks the calculations. `src/styles.css` defines design tokens and components; `src/responsive.css` contains viewport adaptations. Local data is stored under `budgie-studio-v2`.
+`src/main.jsx` contains the UI prototype. `src/data.js` provides sample data, money formatting and recurrence calculations; `src/data.test.js` checks the calculations. `src/styles.css` defines design tokens and components; `src/responsive.css` contains viewport adaptations. Local data is stored under `budgie-studio-v2`. If older saved data needs repair or cannot be loaded, the original text is kept separately and can be downloaded from Settings.

@@ -130,8 +130,11 @@ class ReminderWorker(context: Context, params: WorkerParameters) :
                 .getOrNull()
                 ?.onDate(LocalDate.now()) ?: return Result.retry()
         val notifications = NotificationManagerCompat.from(applicationContext)
+        val ledger =
+            applicationContext.getSharedPreferences("reminder-delivery", Context.MODE_PRIVATE)
         if (!collection.preferences.notifications) {
             notifications.cancelAll()
+            ledger.edit { clear() }
             return Result.success()
         }
         if (
@@ -140,11 +143,16 @@ class ReminderWorker(context: Context, params: WorkerParameters) :
                     applicationContext,
                     Manifest.permission.POST_NOTIFICATIONS,
                 ) != PackageManager.PERMISSION_GRANTED
-        )
+        ) {
+            notifications.cancelAll()
+            ledger.edit { clear() }
             return Result.success()
-        if (!notifications.areNotificationsEnabled()) return Result.success()
-        val ledger =
-            applicationContext.getSharedPreferences("reminder-delivery", Context.MODE_PRIVATE)
+        }
+        if (!notifications.areNotificationsEnabled()) {
+            notifications.cancelAll()
+            ledger.edit { clear() }
+            return Result.success()
+        }
         val today = LocalDate.now()
         val quiet = isQuietHours(LocalTime.now())
         var postedQuietly = false

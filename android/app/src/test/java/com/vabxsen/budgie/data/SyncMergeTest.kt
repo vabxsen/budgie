@@ -50,6 +50,47 @@ class SyncMergeTest {
     }
 
     @Test
+    fun claimPreservesDifferentPlansAndBillingDatesAtTheSamePrice() {
+        val local = sub("local", "Family account", 10000).copy(
+            plan = "Second household", anchorDate = LocalDate.of(2026, 9, 20), notes = "Keep separate"
+        )
+        val cloud = sub("remote", "Family account", 10000).copy(plan = "First household")
+        val result = SyncMerge.subscriptions(
+            listOf(local), mapOf("remote" to RemoteSubscription(cloud, 100L)),
+            SyncMetadata(pendingClaim = true), false, next
+        )!!
+
+        assertEquals(setOf("local", "remote"), result.subscriptions.map { it.id }.toSet())
+        assertEquals(listOf("local"), result.uploads.map { it.id })
+    }
+
+    @Test
+    fun equalTimestampEditsConvergeAndUploadTheChosenVersion() {
+        val cheaper = sub("same", "Family account", 10000)
+        val dearer = cheaper.copy(priceMinor = 20000)
+        val remote = mapOf("same" to RemoteSubscription(dearer, 100L))
+        val first = SyncMerge.subscriptions(
+            listOf(cheaper), remote, SyncMetadata(subscriptionTimes = mutableMapOf("same" to 100L)),
+            false, next
+        )!!
+        val second = SyncMerge.subscriptions(
+            listOf(dearer), remote, SyncMetadata(subscriptionTimes = mutableMapOf("same" to 100L)),
+            false, next
+        )!!
+
+        assertEquals(second.subscriptions, first.subscriptions)
+        assertTrue(first.uploads.isEmpty())
+        assertTrue(second.uploads.isEmpty())
+
+        val higherLocal = dearer.copy(priceMinor = 30000)
+        val metadata = SyncMetadata(subscriptionTimes = mutableMapOf("same" to 100L))
+        val winner = SyncMerge.subscriptions(listOf(higherLocal), remote, metadata, false, next)!!
+        assertEquals(higherLocal, winner.subscriptions.single())
+        assertEquals(higherLocal, winner.uploads.single().subscription)
+        assertTrue(winner.uploads.single().updatedAtMillis > 100L)
+    }
+
+    @Test
     fun claimWaitsForTheServerInsteadOfTrustingTheCache() {
         val metadata = SyncMetadata(pendingClaim = true)
         assertNull(SyncMerge.subscriptions(listOf(sub("guest", "Gym")), emptyMap(), metadata, true, next))

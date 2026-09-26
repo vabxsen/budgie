@@ -378,7 +378,7 @@ fun EditorScreen(
                 }
             }
         }
-        item {
+        if (existing?.status != SubscriptionStatus.ARCHIVED) item {
             Row(
                 Modifier.fillMaxWidth()
                     .background(colors.soft, RoundedCornerShape(13.dp))
