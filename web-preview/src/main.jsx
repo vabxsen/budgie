@@ -66,7 +66,9 @@ import {
   categoryColors,
   money,
   dateLabel,
+  dateString,
   parseDate,
+  isValidDate,
   daysUntil,
   monthlyTotal,
   monthlyValue,
@@ -76,8 +78,10 @@ import {
   dueLabel,
   plural,
   csvCell,
-  isValidSubscription,
+  isValidBackup,
+  currentSubscriptions,
   newId,
+  RECOVERY_KEY,
 } from "./data";
 
 const icons = {
@@ -191,6 +195,13 @@ function Toggle({ checked, onChange, label }) {
 }
 function App() {
   const [saved] = useState(readSaved);
+  const [hasRecovery] = useState(() => {
+    try {
+      return localStorage.getItem(RECOVERY_KEY) !== null;
+    } catch {
+      return false;
+    }
+  });
   const [subs, setSubs] = useState(saved?.subs || initialSubscriptions);
   const [prefs, setPrefs] = useState({
     ...{ budget: 4000, reminder: 3, notifications: true, theme: "light" },
@@ -262,6 +273,7 @@ function App() {
     }))
     .filter((x) => x.value > 0);
   const add = () => setModal({ type: "edit" });
+  const addTrial = () => setModal({ type: "edit", defaultStatus: "Trial" });
   const details = (sub) => setModal({ type: "detail", sub });
   const archive = (sub) => {
     setSubs((prev) =>
@@ -324,14 +336,35 @@ function App() {
         : "Your subscription export is ready.",
     );
   };
+  const downloadRecovery = () => {
+    let original;
+    try {
+      original = localStorage.getItem(RECOVERY_KEY);
+    } catch {
+      notify("Browser storage is unavailable. Your original data could not be downloaded.");
+      return;
+    }
+    if (original === null) {
+      notify("The original data copy is no longer available in this browser.");
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([original], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "budgie-original-data.json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    notify("Your original browser data is ready to download.");
+  };
   const restore = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
     try {
+      if (file.size > 5 * 1024 * 1024) throw Error("Backup exceeds 5 MB");
       const data = JSON.parse(await file.text());
-      if (!Array.isArray(data.subs) || !data.subs.every(isValidSubscription))
+      if (!isValidBackup(data))
         throw Error();
-      setModal({ type: "restore", data });
+      setModal({ type: "restore", data: { ...data, subs: currentSubscriptions(data.subs) } });
     } catch {
       notify("That file is not a valid Budgie backup. Your data is unchanged.");
     }
@@ -1030,9 +1063,9 @@ function App() {
             <div
               className="donut"
               role="img"
-              aria-label={grouped
-                .map((g) => `${g.name}: ${money(g.value)}`)
-                .join(", ")}
+              aria-label={`${annual ? "Annual" : "Monthly"} spending by category. ${grouped
+                .map((g) => `${g.name}: ${money(g.value * (annual ? 12 : 1))}`)
+                .join(", ")}`}
               style={{
                 background: `conic-gradient(${grouped.map((g, i) => `${g.color} ${(grouped.slice(0, i).reduce((a, x) => a + x.value, 0) / total) * 100}% ${(grouped.slice(0, i + 1).reduce((a, x) => a + x.value, 0) / total) * 100}%`).join(", ") || "#ecebe4"})`,
               }}
@@ -1178,7 +1211,7 @@ function App() {
             title="Nothing to keep an eye on."
             text="Your trial reminders will appear here when you add a free trial."
             action={
-              <Button onClick={add} icon={Plus}>
+              <Button onClick={addTrial} icon={Plus}>
                 Add a free trial
               </Button>
             }
@@ -1344,6 +1377,18 @@ function App() {
                   <ArrowUpRight size={16} />
                 </Button>
               </Setting>
+              {hasRecovery && (
+                <Setting
+                  icon={DownloadSimple}
+                  title="Original data copy"
+                  text="Previous browser data could not be loaded. Download its untouched copy for recovery."
+                >
+                  <Button variant="secondary small" onClick={downloadRecovery}>
+                    Download copy
+                    <ArrowUpRight size={16} />
+                  </Button>
+                </Setting>
+              )}
             </section>
           </div>
           <aside>
@@ -1543,6 +1588,7 @@ function App() {
           {modal.type === "edit" ? (
             <SubscriptionForm
               sub={modal.sub}
+              defaultStatus={modal.defaultStatus}
               reminder={prefs.reminder}
               save={save}
               cancel={() => setModal(null)}
@@ -1570,8 +1616,8 @@ function App() {
             <>
               <p className="modal-copy">
                 Replace your current collection with {modal.data.subs.length}{" "}
-                subscriptions from this backup? You can export your current
-                collection first.
+                subscriptions{modal.data.prefs ? " and saved preferences" : ""} from this backup?
+                You can export your current collection first.
               </p>
               <div className="modal-actions">
                 <Button variant="secondary" onClick={() => setModal(null)}>
@@ -1580,11 +1626,12 @@ function App() {
                 <Button
                   onClick={() => {
                     setSubs(modal.data.subs);
+                    if (modal.data.prefs) setPrefs(modal.data.prefs);
                     setModal(null);
-                    notify("Your subscriptions have been restored.");
+                    notify("Your backup has been restored.");
                   }}
                 >
-                  Restore subscriptions
+                  Restore backup
                 </Button>
               </div>
             </>
@@ -1805,7 +1852,7 @@ function Modal({ children, onClose, title }) {
     </dialog>
   );
 }
-function SubscriptionForm({ sub, reminder, save, cancel }) {
+function SubscriptionForm({ sub, defaultStatus = "Active", reminder, save, cancel }) {
   const [form, setForm] = useState(
     sub || {
       name: "",
@@ -1815,7 +1862,7 @@ function SubscriptionForm({ sub, reminder, save, cancel }) {
       date: "2026-09-15",
       category: "Entertainment",
       brand: "custom",
-      status: "Active",
+      status: defaultStatus,
       reminder,
       notes: "",
     },
@@ -1840,9 +1887,13 @@ function SubscriptionForm({ sub, reminder, save, cancel }) {
       !Number.isFinite(Number(form.price)) ||
       Number(form.price) <= 0 ||
       !form.date ||
-      !Number.isFinite(parseDate(form.date).getTime())
+      !isValidDate(form.date)
     ) {
       setError("Add a service name, a valid amount, and a renewal date.");
+      return;
+    }
+    if (form.status === "Trial" && parseDate(form.date) < TODAY) {
+      setError("Choose today or a future date for the trial ending.");
       return;
     }
     save({
@@ -1851,7 +1902,7 @@ function SubscriptionForm({ sub, reminder, save, cancel }) {
       name: form.name.trim(),
       price: Number(form.price),
       reminder: Number(form.reminder),
-      started: sub?.started || "2026-09-12",
+      started: sub?.started || dateString(TODAY),
     });
   };
   return (
@@ -1919,10 +1970,11 @@ function SubscriptionForm({ sub, reminder, save, cancel }) {
       </div>
       <div className="form-pair">
         <label>
-          Next payment
+          {form.status === "Trial" ? "Trial ends" : "Next payment"}
           <input
             type="date"
             required
+            min={form.status === "Trial" ? dateString(TODAY) : undefined}
             value={form.date}
             onChange={(e) => change("date", e.target.value)}
           />

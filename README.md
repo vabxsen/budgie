@@ -15,7 +15,7 @@ Budgie brings recurring payments, renewal dates, and spending into one place. Th
 
 The native app includes subscription creation and editing, weekly/monthly/yearly billing, a renewal calendar, category insights, budgets, free trials, archiving, search, light/dark themes, renewal notifications, CSV/JSON export and restore, Google sign-in with sync between Android devices, and signed in-app updates from GitHub Releases. It starts with an empty collection and no preset budget. Spending is calculated from subscriptions entered by the user.
 
-Open `android/` in Android Studio with JDK 17 or 21 and Android SDK 36. Android 8.0 or newer is supported.
+Open `android/` in Android Studio with JDK 17 or 21 and Android SDK 37. Android 8.0 or newer is supported.
 
 ```sh
 cd android

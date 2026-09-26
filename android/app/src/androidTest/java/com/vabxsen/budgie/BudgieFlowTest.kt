@@ -100,7 +100,8 @@ class BudgieFlowTest {
         seed(BudgieCollection(listOf(Subscription(name = "Netflix", priceMinor = 10000, anchorDate = LocalDate.now()), Subscription(name = "Spotify", priceMinor = 20000, anchorDate = LocalDate.now().plusDays(2))), Preferences(onboarded = true)))
         ui.onNodeWithText("Subscriptions", useUnmergedTree = true).performClick()
         ui.onNodeWithText("Search subscriptions").performScrollTo().performTextInput("Spotify")
-        ui.onNode(hasText("Spotify") and !hasSetTextAction()).performScrollTo().assertIsDisplayed()
+        ui.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Spotify") and !hasSetTextAction())
+        ui.onNode(hasText("Spotify") and !hasSetTextAction()).assertIsDisplayed()
         ui.onNodeWithText("Calendar", useUnmergedTree = true).performClick()
         ui.onNodeWithText("A date with your dues.").assertIsDisplayed()
         ui.onNodeWithText("Insights", useUnmergedTree = true).performClick()
@@ -155,7 +156,17 @@ class BudgieFlowTest {
             }
         }
         ReminderScheduler.checkNow(app)
-        ui.waitUntil(20_000) { manager.activeNotifications.isEmpty() }
+        val ledger = app.getSharedPreferences("reminder-delivery", android.content.Context.MODE_PRIVATE)
+        ui.waitUntil(20_000) { manager.activeNotifications.isEmpty() && ledger.all.isEmpty() }
+        runBlocking {
+            app.repository.update {
+                it.copy(preferences = it.preferences.copy(notifications = true))
+            }
+        }
+        ReminderScheduler.checkNow(app)
+        ui.waitUntil(20_000) { manager.activeNotifications.any { it.tag == "budgie:${sub.id}" } }
+        assertEquals("Reminder check renews today", manager.activeNotifications.first { it.tag == "budgie:${sub.id}" }.notification.extras.getString("android.title"))
+        manager.cancelAll()
         // ActivityScenario matches lifecycle events against its original launch intent.
         instrumentation.runOnMainSync {
             launchedActivity.intent = originalIntent

@@ -1,5 +1,6 @@
 export const TODAY = new Date(2026, 8, 12);
 export const STORAGE_KEY = "budgie-studio-v2";
+export const RECOVERY_KEY = `${STORAGE_KEY}-recovery`;
 export const categories = [
   "Entertainment",
   "Productivity",
@@ -136,8 +137,17 @@ export function money(amount, currency = "INR") {
   }).format(amount);
 }
 export function parseDate(value) {
+  if (!isValidDate(value)) return new Date(NaN);
   const [y, m, d] = value.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+export function isValidDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return false;
+  const [y, m, d] = value.split("-").map(Number);
+  if (y < 1900 || y > 2200) return false;
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
 }
 export function dateString(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -156,6 +166,7 @@ function addMonthsKeepingDay(anchor, months) {
 }
 /** The first billing date on or after `from`, keeping month-end and leap-day anchors. */
 export function nextRenewal(sub, from = TODAY) {
+  if (sub.status === "Trial") return sub.date;
   const anchor = parseDate(sub.date);
   const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
   if (start <= anchor) return sub.date;
@@ -212,6 +223,11 @@ export function occurrences(subs, year, month) {
     result = [];
   for (const sub of subs.filter((s) => s.status !== "Archived")) {
     const anchor = parseDate(sub.date);
+    if (sub.status === "Trial") {
+      if (anchor >= start && anchor <= end)
+        result.push({ ...sub, occurrence: sub.date });
+      continue;
+    }
     if (sub.cycle === "Weekly") {
       const first = new Date(anchor);
       if (first < start)
@@ -242,22 +258,76 @@ export function isValidSubscription(s) {
     s !== null &&
     typeof s === "object" &&
     typeof s.id === "string" &&
+    s.id.trim().length > 0 &&
+    s.id.length <= 100 &&
     typeof s.name === "string" &&
+    s.name.trim().length > 0 &&
     Number.isFinite(s.price) &&
     s.price > 0 &&
-    typeof s.date === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(s.date) &&
+    isValidDate(s.date) &&
     ["Monthly", "Yearly", "Weekly"].includes(s.cycle) &&
     ["Active", "Trial", "Archived"].includes(s.status)
   );
 }
-export function readSaved() {
+export function isValidBackup(value) {
+  if (!value || !Array.isArray(value.subs) || value.subs.length > 5000 ||
+      !value.subs.every(isValidSubscription)) return false;
+  const ids = value.subs.map((s) => s.id);
+  if (new Set(ids).size !== ids.length) return false;
+  if (value.prefs === undefined) return true; // Older, subscriptions-only exports.
+  const p = value.prefs;
+  return p !== null && typeof p === "object" && !Array.isArray(p) &&
+    Number.isFinite(p.budget) && p.budget >= 0 && p.budget <= 10_000_000 &&
+    [1, 2, 3, 7].includes(p.reminder) &&
+    typeof p.notifications === "boolean" &&
+    ["light", "dark"].includes(p.theme);
+}
+export function currentSubscriptions(subs, today = TODAY) {
+  return subs.map((s) =>
+    s.status === "Trial" && parseDate(s.date) < today
+      ? { ...s, status: "Active" }
+      : s,
+  );
+}
+function preserveOriginalSaved(text) {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (raw && Array.isArray(raw.subs) && raw.subs.every(isValidSubscription))
-      return raw;
+    if (text !== null && localStorage.getItem(RECOVERY_KEY) === null)
+      localStorage.setItem(RECOVERY_KEY, text);
   } catch {
-    /* Invalid or unavailable storage falls back to sample data. */
+    /* If storage is unavailable, leave the original entry untouched. */
   }
+}
+export function readSaved() {
+  let text;
+  try {
+    text = localStorage.getItem(STORAGE_KEY);
+    if (text === null) return null;
+    const raw = JSON.parse(text);
+    if (isValidBackup(raw)) return { ...raw, subs: currentSubscriptions(raw.subs) };
+    if (raw && Array.isArray(raw.subs) && raw.subs.length <= 5000 &&
+        raw.subs.every(isValidSubscription)) {
+      const seen = new Set();
+      const repaired = {
+        ...raw,
+        subs: raw.subs.map((sub) => {
+          if (!seen.has(sub.id)) {
+            seen.add(sub.id);
+            return sub;
+          }
+          let id;
+          do { id = newId(); } while (seen.has(id));
+          seen.add(id);
+          return { ...sub, id };
+        }),
+      };
+      if (isValidBackup(repaired)) {
+        preserveOriginalSaved(text);
+        return { ...repaired, subs: currentSubscriptions(repaired.subs) };
+      }
+    }
+  } catch {
+    /* Preserve invalid JSON before the sample collection is displayed. */
+  }
+  preserveOriginalSaved(text);
   return null;
 }

@@ -8,6 +8,7 @@ import com.vabxsen.budgie.domain.BudgieCollection
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,7 +70,8 @@ internal constructor(
     private val pendingWrites = AtomicInteger(0)
     private val syncGeneration = AtomicInteger(0)
     private val retryAttempts = AtomicInteger(0)
-    @Volatile private var serverSynced = false
+    @Volatile private var subscriptionsServerReady = false
+    @Volatile private var preferencesServerReady = false
     @Volatile private var offline = false
     @Volatile private var failed = false
     @Volatile private var subscriptionsProblem: String? = null
@@ -230,7 +232,7 @@ internal constructor(
         connectTimeoutJob =
             scope.launch {
                 delay(CONNECT_TIMEOUT_MILLIS)
-                if (isCurrent(uid, generation) && !serverSynced) {
+                if (isCurrent(uid, generation) && !serverReady()) {
                     offline = true
                     publishStatus(uid)
                 }
@@ -278,11 +280,11 @@ internal constructor(
             uploads = merge.uploads
         }
         if (fromCache) {
-            if (serverSynced) offline = true
+            if (serverReady()) offline = true
         } else {
-            serverSynced = true
+            subscriptionsServerReady = true
             offline = false
-            retryAttempts.set(0)
+            if (serverReady()) retryAttempts.set(0)
         }
         uploads.forEach { upload ->
             val data =
@@ -326,6 +328,13 @@ internal constructor(
             upload = merge.uploadAtMillis?.let { current.preferences.toFirestore(it) }
         }
         upload?.let { value -> write(uid) { done -> cloud.writePreferences(uid, value, done) } }
+        if (fromCache) {
+            if (serverReady()) offline = true
+        } else {
+            preferencesServerReady = true
+            offline = false
+            if (serverReady()) retryAttempts.set(0)
+        }
         publishStatus(uid)
     }
 
@@ -334,10 +343,17 @@ internal constructor(
         val generation = syncGeneration.get()
         pendingWrites.incrementAndGet()
         publishStatus(uid)
-        send { success ->
-            if (generation != syncGeneration.get()) return@send
+        val resolved = AtomicBoolean(false)
+        val complete: (Boolean) -> Unit = complete@{ success ->
+            if (!resolved.compareAndSet(false, true)) return@complete
+            if (generation != syncGeneration.get()) return@complete
             pendingWrites.updateAndGet { (it - 1).coerceAtLeast(0) }
             if (success) publishStatus(uid) else syncFailed(uid, generation)
+        }
+        try {
+            send(complete)
+        } catch (_: Exception) {
+            complete(false)
         }
     }
 
@@ -355,7 +371,7 @@ internal constructor(
                     )
                 problem != null -> SyncState(SyncStatus.ERROR, current.lastSyncedAtMillis, problem)
                 offline -> SyncState(SyncStatus.OFFLINE, current.lastSyncedAtMillis)
-                !serverSynced -> SyncState(SyncStatus.CONNECTING, current.lastSyncedAtMillis)
+                !serverReady() -> SyncState(SyncStatus.CONNECTING, current.lastSyncedAtMillis)
                 pendingWrites.get() > 0 -> SyncState(SyncStatus.SYNCING, current.lastSyncedAtMillis)
                 current.status == SyncStatus.SYNCED -> current
                 else -> SyncState(SyncStatus.SYNCED, clock())
@@ -395,7 +411,8 @@ internal constructor(
         connectTimeoutJob?.cancel()
         connectTimeoutJob = null
         pendingWrites.set(0)
-        serverSynced = false
+        subscriptionsServerReady = false
+        preferencesServerReady = false
         offline = false
         failed = false
         subscriptionsProblem = null
@@ -405,6 +422,8 @@ internal constructor(
 
     private fun isCurrent(uid: String, generation: Int) =
         generation == syncGeneration.get() && uid == activeUid && cloud.currentUid == uid
+
+    private fun serverReady() = subscriptionsServerReady && preferencesServerReady
 
     private fun nextTimestampLocked(): Long {
         val latest =

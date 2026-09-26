@@ -56,6 +56,34 @@ internal object SyncMerge {
                 }
             } else if (localTime > cloud.updatedAtMillis && !fromCache) {
                 uploads[id] = SyncUpload(id, merged[id], localTime)
+            } else if (localTime == cloud.updatedAtMillis) {
+                val saved = merged[id]
+                when {
+                    cloud.subscription == null -> {
+                        // An equal-time deletion must not resurrect a subscription.
+                        merged.remove(id)
+                        metadata.subscriptionTimes.remove(id)
+                        metadata.deletedTimes[id] = cloud.updatedAtMillis
+                    }
+                    metadata.deletedTimes.containsKey(id) -> {
+                        // A local deletion wins the tie, then gets a newer timestamp so other
+                        // devices can observe the same decision.
+                        if (!fromCache) {
+                            val time = nextTimestamp()
+                            metadata.deletedTimes[id] = time
+                            uploads[id] = SyncUpload(id, null, time)
+                        }
+                    }
+                    saved == null || saved.conflictKey() < cloud.subscription.conflictKey() -> {
+                        merged[id] = cloud.subscription
+                        metadata.subscriptionTimes[id] = cloud.updatedAtMillis
+                    }
+                    saved != cloud.subscription && !fromCache -> {
+                        val time = nextTimestamp()
+                        metadata.subscriptionTimes[id] = time
+                        uploads[id] = SyncUpload(id, saved, time)
+                    }
+                }
             }
         }
         if (!fromCache) {
@@ -90,6 +118,14 @@ internal object SyncMerge {
                 PreferencesMerge(cloud.copy(notifications = local.notifications), null)
             }
             metadata.preferencesTime > cloudTime -> PreferencesMerge(null, metadata.preferencesTime)
+            // Equal timestamps can occur when devices edit while disconnected. Resolve them
+            // using the same ordering on every device, and publish a newer timestamp if local wins.
+            cloud.syncedFields().toString() > local.syncedFields().toString() ->
+                PreferencesMerge(cloud.copy(notifications = local.notifications), null)
+            cloud.syncedFields() != local.syncedFields() && !fromCache -> {
+                metadata.preferencesTime = nextTimestamp()
+                PreferencesMerge(null, metadata.preferencesTime)
+            }
             else -> PreferencesMerge(null, null)
         }
     }
@@ -97,5 +133,18 @@ internal object SyncMerge {
     private fun Subscription.isSameServiceAs(other: Subscription) =
         name.trim().equals(other.name.trim(), ignoreCase = true) &&
             cycle == other.cycle &&
-            priceMinor == other.priceMinor
+            priceMinor == other.priceMinor &&
+            plan == other.plan &&
+            anchorDate == other.anchorDate &&
+            category == other.category &&
+            brand == other.brand &&
+            status == other.status &&
+            reminderDays == other.reminderDays &&
+            notes == other.notes &&
+            createdDate == other.createdDate
+
+    private fun Subscription.conflictKey() =
+        listOf(name, plan, priceMinor.toString(), cycle.name, anchorDate.toString(), category.name,
+            brand, status.name, reminderDays.toString(), notes, createdDate.toString())
+            .joinToString("") { "${it.length}:$it" }
 }

@@ -11,7 +11,13 @@ import {
   plural,
   csvCell,
   isValidSubscription,
+  isValidBackup,
+  isValidDate,
+  currentSubscriptions,
   newId,
+  readSaved,
+  STORAGE_KEY,
+  RECOVERY_KEY,
 } from "./data.js";
 
 test("spending totals count active plans and normalize billing cycles", () => {
@@ -111,6 +117,50 @@ test("saved data and restored backups share one validation", () => {
   assert.equal(isValidSubscription(sub), true);
   assert.equal(isValidSubscription({ ...sub, price: "649" }), false);
   assert.equal(isValidSubscription({ ...sub, cycle: "Daily" }), false);
+  assert.equal(isValidSubscription({ ...sub, id: "" }), false);
+  assert.equal(isValidSubscription({ ...sub, date: "2026-99-99" }), false);
+  assert.equal(isValidDate("2026-02-29"), false);
+  assert.equal(isValidDate("2028-02-29"), true);
+});
+test("backup validation keeps duplicate records from overwriting one another", () => {
+  const sub = initialSubscriptions[0];
+  const prefs = { budget: 9000, reminder: 7, notifications: false, theme: "dark" };
+  assert.equal(isValidBackup({ subs: [sub], prefs }), true);
+  assert.equal(isValidBackup({ subs: [sub, { ...sub, name: "Another" }], prefs }), false);
+  assert.equal(isValidBackup({ subs: [sub], prefs: { ...prefs, budget: "9000" } }), false);
+});
+test("legacy duplicate IDs are repaired without losing either record", () => {
+  const entries = new Map([[STORAGE_KEY, JSON.stringify({ subs: [
+    initialSubscriptions[0],
+    { ...initialSubscriptions[0], name: "A distinct subscription" },
+  ] })]]);
+  const previous = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (key) => entries.get(key) ?? null,
+    setItem: (key, value) => entries.set(key, value),
+  };
+  try {
+    const restored = readSaved();
+    assert.equal(restored.subs.length, 2);
+    assert.notEqual(restored.subs[0].id, restored.subs[1].id);
+    assert.equal(restored.subs[1].name, "A distinct subscription");
+    assert.equal(entries.get(RECOVERY_KEY), entries.get(STORAGE_KEY));
+    entries.set(STORAGE_KEY, "newer invalid data");
+    assert.equal(readSaved(), null);
+    assert.notEqual(entries.get(RECOVERY_KEY), entries.get(STORAGE_KEY));
+  } finally {
+    if (previous === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previous;
+  }
+});
+test("expired trials occur once, then enter active spending on restore", () => {
+  const trial = { ...initialSubscriptions[0], id: "trial", status: "Trial", date: "2026-09-01" };
+  const today = new Date(2026, 8, 12);
+  assert.equal(nextRenewal(trial, today), "2026-09-01");
+  assert.equal(occurrences([trial], 2026, 9).length, 0);
+  const [active] = currentSubscriptions([trial], today);
+  assert.equal(active.status, "Active");
+  assert.equal(monthlyTotal([active]), active.price);
 });
 test("ids and labels work without a secure context", () => {
   assert.match(newId(), /\S+/);

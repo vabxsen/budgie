@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vabxsen.budgie.auth.AccountViewModel
+import com.vabxsen.budgie.notifications.ReminderScheduler
 import com.vabxsen.budgie.updates.UpdateUiState
 import com.vabxsen.budgie.updates.UpdateViewModel
 import kotlinx.coroutines.launch
@@ -96,8 +97,10 @@ class MainActivity : ComponentActivity() {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
                     today = LocalDate.now()
-                    permission =
+                    val allowed =
                         NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled()
+                    if (permission != allowed) ReminderScheduler.checkNow(this@MainActivity)
+                    permission = allowed
                     updateVm.continueInstallIfAllowed(this@MainActivity)
                 }
             }
